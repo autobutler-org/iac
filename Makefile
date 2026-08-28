@@ -31,6 +31,12 @@ BOOTSTRAP_PARAMS := bootstrap/main.bicepparam
 
 EXTRA_TF_ARGS ?=
 EXTRA_TFLINT_ARGS ?=
+EXTRA_MARKDOWNLINT_ARGS ?=
+
+# Every committed Markdown file. node_modules is excluded because the linter would
+# otherwise lint the dependencies it was installed from, and .claude because agent
+# worktrees are separate checkouts that happen to sit inside this one.
+MARKDOWN_GLOBS := "**/*.md" "!node_modules" "!.claude"
 
 # The azurerm provider reads ARM_SUBSCRIPTION_ID natively, so pointing terraform at the
 # right subscription needs no terraform variable and no GUID committed to the repo: the
@@ -169,7 +175,7 @@ bootstrap: want-az az-login ## Deploy the terraform state backend (run once, bef
 
 ##@ Checks
 
-check: check/format check/lint check/bicep check/validate ## Everything CI checks, in one target
+check: check/format check/lint check/markdown check/bicep check/validate ## Everything CI checks, in one target
 
 check/format: want-terraform ## Fail if any HCL is unformatted
 	echo "[$@] azure/ modules/"
@@ -181,6 +187,12 @@ check/lint: want-tflint ## Run tflint over every root module and shared module
 	# to be absolute: with --recursive tflint resolves it per directory.
 	tflint --config=$(PWD)/.tflint.hcl --init
 	tflint --config=$(PWD)/.tflint.hcl --recursive $(EXTRA_TFLINT_ARGS)
+
+check/markdown: want-npx ## Lint every committed Markdown file
+	echo "[$@] $(MARKDOWN_GLOBS)"
+	# Runs from node_modules via the committed package-lock.json, so CI and a developer's
+	# desk get byte-identical rules. Needs no Azure credentials -- it reads files only.
+	npx --no-install markdownlint-cli2 $(MARKDOWN_GLOBS) $(EXTRA_MARKDOWNLINT_ARGS)
 
 check/bicep: want-az ## Fail if the bootstrap template does not compile
 	echo "[$@] $(BOOTSTRAP_TEMPLATE)"
@@ -195,12 +207,17 @@ check/validate: subscription-required want-terraform ## Validate with no Azure c
 	terraform -chdir=$(TF_DIR) init -backend=false -input=false >/dev/null
 	terraform -chdir=$(TF_DIR) validate $(EXTRA_TF_ARGS)
 
-fix: fix/format fix/lint ## Fix what can be fixed automatically
+fix: fix/format fix/lint fix/markdown ## Fix what can be fixed automatically
 
 fix/format: format ## Alias for format
 
 fix/lint: ## Apply tflint's automatic fixes
 	$(MAKE) check/lint EXTRA_TFLINT_ARGS="--fix $(EXTRA_TFLINT_ARGS)"
+
+fix/markdown: ## Apply markdownlint's automatic fixes
+	# Only some rules are auto-fixable -- MD013 line length and MD040 fence languages are
+	# not, so expect this to leave real findings behind rather than silence everything.
+	$(MAKE) check/markdown EXTRA_MARKDOWNLINT_ARGS="--fix $(EXTRA_MARKDOWNLINT_ARGS)"
 
 format: want-terraform ## Rewrite all HCL in canonical format
 	echo "[$@] azure/ modules/"
@@ -265,6 +282,7 @@ want-%:
 			tflint)    echo "  Install: brew install tflint" >&2 ;;
 			az)        echo "  Install: brew install azure-cli" >&2 ;;
 			jq)        echo "  Install: brew install jq" >&2 ;;
+			npx)       echo "  Install: brew install node, then 'npm ci' in the repo root" >&2 ;;
 			*)         echo "  No install hint recorded for $*. Add one to the want-% rule." >&2 ;;
 		esac
 		exit 1
