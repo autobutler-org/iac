@@ -1,0 +1,199 @@
+#!/bin/bash
+# Headscale + provisioning service -- VM setup script.
+#
+# Runs as root via the Azure CustomScript extension. Rendered by templatefile() in
+# compute.tf, so this is a Terraform template rather than a plain script, and the two
+# variable syntaxes collide:
+#
+#     $${name}    Terraform substitutes this at plan time
+#     $$${name}   renders to a literal $${name} -- the shell expands it at run time
+#
+# Every shell variable below is therefore doubled. Adding an undoubled one silently hands
+# it to Terraform, which fails with "Invalid function argument" if it is not a declared
+# template variable -- or, worse, substitutes an empty string if it is.
+#
+# Re-runs safely. The extension re-executes this whenever the rendered content changes,
+# against the existing VM -- no reprovision, no lost state. Everything below is written to
+# tolerate that: package installs are idempotent, config files are overwritten wholesale,
+# and the headscale database is never touched.
+set -euox pipefail
+
+DOMAIN="${domain}"
+ADMIN_EMAIL='${admin_email}'
+
+# -- Helpers ---------------------------------------------------------------
+log() { echo "[setup] $*"; }
+retry() {
+  local n=0
+  until [ "$n" -ge 5 ]; do
+    "$@" && return 0
+    n=$((n+1))
+    log "Retrying ($n/5)..."
+    sleep 5
+  done
+  return 1
+}
+
+# -- 1. System packages ----------------------------------------------------
+log "Installing system packages..."
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -qq
+apt-get install -y -qq \
+  curl wget jq git nginx certbot python3-certbot-nginx \
+  ca-certificates gnupg lsb-release
+
+# -- 2. Go -----------------------------------------------------------------
+log "Installing Go..."
+GO_VERSION=${go_version}
+wget -q -O /tmp/go.tar.gz "https://go.dev/dl/go$${GO_VERSION}.linux-amd64.tar.gz"
+rm -rf /usr/local/go
+tar -C /usr/local -xzf /tmp/go.tar.gz
+export PATH=/usr/local/go/bin:$PATH
+export GOPATH=/root/go
+export GOMODCACHE=/root/go/pkg/mod
+go version
+
+# -- 3. Headscale ----------------------------------------------------------
+log "Installing Headscale..."
+HS_VERSION=${headscale_version}
+HS_VER="$${HS_VERSION#v}"
+retry wget -q -O /tmp/headscale.deb \
+  "https://github.com/juanfont/headscale/releases/download/$${HS_VERSION}/headscale_$${HS_VER}_linux_amd64.deb"
+dpkg -i /tmp/headscale.deb
+
+mkdir -p /etc/headscale /var/lib/headscale
+
+# listen_addr, grpc_listen_addr and metrics_listen_addr are all bound to 127.0.0.1. Nginx
+# is the only thing that reaches headscale, and it does so over loopback. This is why the
+# network security group opens no port for gRPC: nothing is listening on a public
+# interface for it to reach. See network.tf.
+cat > /etc/headscale/config.yaml <<EOF
+server_url: https://$${DOMAIN}
+listen_addr: 127.0.0.1:8080
+grpc_listen_addr: 127.0.0.1:50443
+metrics_listen_addr: 127.0.0.1:9090
+
+log:
+  level: info
+
+noise:
+  private_key_path: /var/lib/headscale/noise_private.key
+
+prefixes:
+  v4: 100.64.0.0/10
+  v6: fd7a:115c:a1e0::/48
+  allocation: sequential
+
+database:
+  type: sqlite
+  sqlite:
+    path: /var/lib/headscale/db.sqlite
+
+dns:
+  override_local_dns: true
+  nameservers:
+    global:
+      - 1.1.1.1
+  base_domain: ${base_domain}
+
+derp:
+  server:
+    enabled: false
+  urls:
+    - https://controlplane.tailscale.com/derpmap/default
+  auto_update_enabled: true
+  update_frequency: 3h
+EOF
+
+systemctl enable headscale
+systemctl restart headscale
+log "Headscale started."
+
+# -- 4. Nginx (HTTP only first -- TLS after DNS propagates) ----------------
+log "Configuring Nginx..."
+rm -f /etc/nginx/sites-enabled/default
+
+cat > /etc/nginx/sites-available/headscale <<EOF
+server {
+    listen 80;
+    server_name $${DOMAIN};
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+EOF
+ln -sf /etc/nginx/sites-available/headscale /etc/nginx/sites-enabled/headscale
+nginx -t
+systemctl reload nginx
+log "Nginx configured (HTTP only, TLS pending DNS)."
+
+# -- 5. TLS -- deliberately non-fatal --------------------------------------
+# certbot cannot succeed until an A record for $${DOMAIN} resolves to this VM's public IP,
+# and that record is created by hand after the IP exists. A first boot therefore fails here
+# under normal conditions, so this must not abort the script: everything below it -- the
+# provisioning binary and its unit -- has nothing to do with TLS and should still land.
+# Re-run the printed command once DNS is live, or just re-apply to re-run this whole script.
+log "Attempting TLS certificate (non-fatal if DNS not propagated yet)..."
+certbot --nginx -d "$${DOMAIN}" \
+  --non-interactive --agree-tos -m "$${ADMIN_EMAIL}" \
+  --redirect \
+  && log "TLS certificate issued." \
+  || log "WARNING: certbot failed. Once DNS points to this IP, run: sudo certbot --nginx -d $${DOMAIN} --non-interactive --agree-tos -m $${ADMIN_EMAIL} --redirect"
+
+# -- 6. Provisioning service -----------------------------------------------
+rm -rf ${source_dir}
+git clone --depth 1 --branch ${repo_branch} ${repo_url} ${source_dir}
+
+cd ${source_dir}
+GOPATH=/root/go GOMODCACHE=/root/go/pkg/mod GOCACHE=/root/go/cache \
+  /usr/local/go/bin/go build -o /usr/local/bin/${service_name} ${provisioning_package}
+log "Provisioning binary installed at /usr/local/bin/${service_name}"
+
+# -- 7. Provisioning service systemd unit ----------------------------------
+# HEADSCALE_API_KEY is deliberately absent and stays a manual post-boot step. The key
+# cannot exist before headscale has run at least once -- it is minted by
+# `headscale apikeys create` against a running server -- so nothing here could supply it.
+# EnvironmentFile takes a leading `-`, so the unit loads cleanly while the file is empty;
+# the service simply cannot talk to headscale until the key is written.
+cat > /etc/systemd/system/${service_name}.service <<'UNIT'
+[Unit]
+Description=Quark Provisioning Service
+After=network.target headscale.service
+Requires=headscale.service
+
+[Service]
+Type=simple
+User=headscale
+Environment=PORT=8081
+Environment=HEADSCALE_URL=http://127.0.0.1:8080
+EnvironmentFile=-${config_dir}/provisioning.env
+ExecStart=/usr/local/bin/${service_name}
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+mkdir -p ${config_dir}
+touch ${config_dir}/provisioning.env
+chown headscale:headscale ${config_dir}/provisioning.env
+chmod 600 ${config_dir}/provisioning.env
+
+systemctl daemon-reload
+systemctl enable ${service_name}
+# Deliberately not started -- see the API key note above.
+
+log "Setup complete. Public IP: $(curl -s ifconfig.me)"
+log ""
+log "Post-deploy steps:"
+log "  1. Create API key: sudo headscale apikeys create --expiration 9999d"
+log "  2. Store key: echo 'HEADSCALE_API_KEY=<key>' | sudo tee ${config_dir}/provisioning.env"
+log "  3. Start provisioning: sudo systemctl start ${service_name}"
