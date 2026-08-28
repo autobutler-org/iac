@@ -123,7 +123,7 @@ Both required variables go in `${config_dir}/provisioning.env`, which the unit l
 Clients call the provisioning service, which mints a headscale pre-auth key on their behalf
 so the headscale API key never leaves the server:
 
-```
+```http
 POST http://network.quark.ts.autobutler.org:8081/provision
 X-Provisioning-Secret: <PROVISIONING_SECRET>
 ```
