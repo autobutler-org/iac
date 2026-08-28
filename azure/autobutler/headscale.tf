@@ -26,5 +26,11 @@ module "quark_headscale" {
   admin_username        = "quark"
   admin_ssh_public_key  = var.quark_headscale_ssh_public_key
 
+  # With the zone passed in, the module owns its own A record as an alias to the public IP
+  # resource. That removes the apply -> read the IP -> create the record -> apply again
+  # loop the manual approach needs, and the record follows the IP if it is ever replaced.
+  dns_zone_name                = azurerm_dns_zone.tailnet.name
+  dns_zone_resource_group_name = azurerm_resource_group.dns.name
+
   tags = local.tags
 }

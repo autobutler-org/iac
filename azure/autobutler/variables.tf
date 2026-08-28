@@ -13,13 +13,13 @@ variable "tags" {
 variable "quark_headscale_domain" {
   description = "Public FQDN the quark tailnet's headscale control server is reached on. An A record for it must point at the module's public IP before TLS can be issued."
   type        = string
-  default     = "network.quark.autobutler.org"
+  default     = "network.quark.ts.autobutler.org"
 }
 
 variable "quark_headscale_base_domain" {
   description = "MagicDNS base domain headscale hands out to nodes on the quark tailnet."
   type        = string
-  default     = "headscale.quark.autobutler.org"
+  default     = "headscale.quark.ts.autobutler.org"
 }
 
 variable "quark_headscale_admin_email" {
@@ -32,4 +32,10 @@ variable "quark_headscale_ssh_public_key" {
   description = "SSH public key authorised on the quark headscale VM. Public half only, so committing it is what lets CI apply without a secret; it matches the key on the existing autobutler headscale host."
   type        = string
   default     = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBFF2mZiRit7xR865+/Relyro1JBD1TzGT48XeC4XGSg autobutler.org@gmail.com"
+}
+
+variable "tailnet_dns_zone" {
+  description = "Public DNS zone delegated to Azure for tailnet records. Its parent stays at Porkbun; only this label is delegated."
+  type        = string
+  default     = "ts.autobutler.org"
 }

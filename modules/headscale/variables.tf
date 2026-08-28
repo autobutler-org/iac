@@ -135,3 +135,15 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "dns_zone_name" {
+  description = "Azure DNS zone to create the control server's A record in. Leave null to manage the record outside terraform, in which case headscale_domain must be pointed at the public_ip_address output by hand. headscale_domain must be inside this zone."
+  type        = string
+  default     = null
+}
+
+variable "dns_zone_resource_group_name" {
+  description = "Resource group holding dns_zone_name. Required when dns_zone_name is set; the zone is commonly in a different group from the VM."
+  type        = string
+  default     = null
+}

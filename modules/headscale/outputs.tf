@@ -9,8 +9,12 @@ output "public_ip_fqdn" {
 }
 
 output "dns_record_required" {
-  description = "The DNS record an operator must create before certbot can issue a certificate. Until this resolves, the VM serves headscale over plain HTTP and certbot fails non-fatally on every run."
-  value       = "${var.headscale_domain}. IN A ${azurerm_public_ip.this.ip_address}"
+  description = "The DNS record an operator must create by hand, or a note that terraform owns it. Empty-handed guessing about which is the case is how the wrong record gets created twice."
+  value = var.dns_zone_name == null ? (
+    "${var.headscale_domain}. IN A ${azurerm_public_ip.this.ip_address}"
+    ) : (
+    "none -- managed by terraform as an alias record in ${var.dns_zone_name}"
+  )
 }
 
 output "vm_id" {
