@@ -4,6 +4,11 @@
 # exposes, the constant in remoteutil.go that has to point at them, and the two secrets
 # the provisioning service needs post-boot. Read it before changing a domain here.
 #
+# VERIFYING-HEADSCALE.md, next to this file, is how to prove the server works after an
+# apply -- without any quark change, because the stock Tailscale client takes
+# --login-server. Test the infrastructure before the quark PR exists, or a failure could
+# be in either repo with no way to tell which.
+#
 # The resource group already existed (created by hand alongside the autobutler one) and is
 # adopted in imports.tf rather than created here -- see the comment there.
 #
