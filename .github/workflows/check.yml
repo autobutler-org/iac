@@ -1,0 +1,62 @@
+# Formatting, linting and validation. Deliberately needs NO Azure credentials: every step
+# here reads files and provider schemas and nothing else. `make check/validate` inits with
+# -backend=false, so it contacts no storage account and assumes no identity -- which means
+# this workflow still gives a real signal on a fork PR, or before `make bootstrap` has ever
+# been run.
+#
+# Anything that needs to reach Azure lives in plan.yml.
+name: Check
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+defaults:
+  run:
+    shell: bash
+permissions:
+  contents: read
+env:
+  # Must satisfy the required_version constraint in azure/<subscription>/backend.tf.
+  TERRAFORM_VERSION: "1.16.0"
+jobs:
+  check-terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          # The wrapper rewrites terraform's exit codes, which breaks the Makefile's
+          # deliberate handling of `plan` exit 2. Off everywhere, for consistency.
+          terraform_wrapper: false
+
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v6
+
+      - name: Check formatting
+        run: |
+          make check/format
+
+      - name: Lint
+        run: |
+          make check/lint
+
+      - name: Validate
+        run: |
+          make check/validate
+
+  check-bicep:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      # The Azure CLI is preinstalled on ubuntu-latest, and `az bicep build` compiles
+      # locally -- no login, no subscription, no network calls to ARM.
+      - name: Check bootstrap template compiles
+        run: |
+          make check/bicep

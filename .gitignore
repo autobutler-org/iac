@@ -1,0 +1,32 @@
+.DS_Store
+.idea/
+*.log
+tmp/
+
+# The archive this repo's Makefile and lint config were seeded from. Kept on disk as a
+# provenance record, never committed.
+xaas-terraform-main.zip
+
+# Terraform working directories. A bare `terraform init` writes these into the stack
+# directory it runs in, next to the sources.
+# .terraform.lock.hcl is deliberately NOT ignored: it is committed per stack and has to
+# cover every platform CI runs on. See README.md.
+.terraform/
+.terraform-*
+*override.tf.json
+*.tfplan
+
+# State must never be committed. errored.tfstate in particular is what terraform leaves
+# behind when it mutated the provider but could not write state to the backend, so it is
+# both a recovery artifact and a full state snapshot.
+*.tfstate
+*.tfstate.*
+errored.tfstate
+
+# Scratch output of `terraform plan -generate-config-out`. Always migrated by hand into the
+# real per-type file, never committed.
+generated.tf
+
+# Compiled output of `az bicep build`. The .bicep source is the artifact; the ARM JSON is
+# generated on demand by `make check/bicep`.
+bootstrap/**/*.json

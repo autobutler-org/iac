@@ -1,0 +1,85 @@
+# Terraform plan against real Azure state.
+#
+# Two triggers in one file on purpose. `pull_request` is how a reviewer sees what a change
+# would do; `workflow_call` makes this reusable, so apply.yml runs the exact same plan job
+# as its first step rather than duplicating the steps and drifting from them.
+#
+# Authentication is OIDC -- azure/login exchanges a short-lived GitHub token for an Azure
+# one, so there is no client secret anywhere. AZURE_CLIENT_ID, AZURE_TENANT_ID and
+# AZURE_SUBSCRIPTION_ID are repository *variables*, not secrets: none of the three is
+# sensitive, and with OIDC there is no credential to hide. bootstrap/github-oidc.bash
+# creates the app registration and prints the commands that set them.
+name: Plan
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_call:
+defaults:
+  run:
+    shell: bash
+permissions:
+  # id-token: write is what lets the job mint the OIDC token azure/login exchanges.
+  id-token: write
+  contents: read
+concurrency:
+  group: ${{ github.repository }}-${{ github.workflow }}-${{ github.ref }}
+  # A superseded plan is worth nothing, so cancelling one costs nothing. Contrast apply.yml.
+  cancel-in-progress: true
+env:
+  TERRAFORM_VERSION: "1.16.0"
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Login to Azure
+        uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          # The wrapper rewrites terraform's exit codes. `make plan` treats exit 2 as
+          # "changes present" and keeps the planfile; the wrapper breaks that.
+          terraform_wrapper: false
+
+      - name: Init
+        run: |
+          make init
+
+      # `make plan` passes -lock=false deliberately: a plan is read-only and has no business
+      # holding the blob lease an apply needs. What serializes CI is the concurrency group
+      # above, not the state lock.
+      - name: Plan
+        run: |
+          make plan
+
+      # A planfile is opaque to a human reviewer. The job summary is the reviewable half.
+      - name: Write plan to job summary
+        run: |
+          {
+            echo "<details><summary>Terraform plan for \`${{ github.sha }}\`</summary>"
+            echo
+            echo '```terraform'
+            make plan/show
+            echo '```'
+            echo
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Named with the commit SHA so apply.yml can prove it is applying the plan for the
+      # commit it is actually running on, rather than whatever plan happened to be latest.
+      - name: Upload planfile
+        uses: actions/upload-artifact@v7
+        with:
+          name: planfile-${{ github.sha }}
+          path: azure/autobutler/planfile.tfplan
+          retention-days: 5
+          if-no-files-found: error

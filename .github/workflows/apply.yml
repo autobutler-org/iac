@@ -1,0 +1,75 @@
+# Terraform apply. Runs on push to main -- so an apply always corresponds to a reviewed,
+# merged commit -- and on manual dispatch for recovery.
+#
+# The plan is not re-derived here. This workflow calls plan.yml, then applies the planfile
+# that job produced, so what gets applied is exactly what was planned for this commit.
+name: Apply
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+defaults:
+  run:
+    shell: bash
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.repository }}-${{ github.workflow }}
+  # Never cancel an apply mid-flight. A half-applied change leaves Azure and the state file
+  # disagreeing, which is strictly worse than an apply that waited its turn.
+  cancel-in-progress: false
+env:
+  TERRAFORM_VERSION: "1.16.0"
+jobs:
+  plan:
+    uses: ./.github/workflows/plan.yml
+    permissions:
+      id-token: write
+      contents: read
+    secrets: inherit
+
+  apply:
+    needs: plan
+    runs-on: ubuntu-latest
+    # GitHub creates this environment on first use with no protection rules, so it changes
+    # nothing today. It exists so required reviewers, a wait timer, or branch restrictions
+    # can be added later in repo settings without touching this file.
+    environment: production
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Login to Azure
+        uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+
+      - name: Download planfile
+        uses: actions/download-artifact@v8
+        with:
+          name: planfile-${{ github.sha }}
+          path: azure/autobutler
+
+      # init runs again rather than carrying .terraform/ across jobs. A planfile is bound to
+      # the configuration and the state it was made against, so the apply job has to init
+      # against that same state anyway -- and the committed four-platform lock file makes
+      # this restore byte-identical providers, which is the part that actually matters.
+      - name: Init
+        run: |
+          make init
+
+      - name: Apply
+        run: |
+          make apply-from-planfile

@@ -1,0 +1,23 @@
+# Configuration reference: https://editorconfig.org/#file-format-details
+
+# This is the top-most EditorConfig file
+root = true
+
+[*]
+end_of_line = lf
+insert_final_newline = true
+charset = utf-8
+indent_style = space
+
+[*.tf]
+indent_size = 2
+
+[*.bicep]
+indent_size = 2
+
+[*.json]
+indent_size = 4
+insert_final_newline = false
+
+[Makefile]
+indent_style = tab
