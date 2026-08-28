@@ -187,13 +187,26 @@ cmd_doctor() {
 
 	echo "  federated credentials:"
 	local existing
-	existing=$(az ad app federated-credential list --id "$app_id" --query "[].subject" -o tsv 2>/dev/null || true)
+	# Keyed by name for the same reason cmd_create is: a credential whose name is right but
+	# whose subject is stale is the failure that actually happens, and reporting it as a flat
+	# MISSING sends you off to create one, which then collides on the name already there.
+	# Name the real problem instead.
+	existing=$(az ad app federated-credential list --id "$app_id" \
+		--query "[].{name:name,subject:subject}" -o tsv 2>/dev/null || true)
 	local missing=0
+	local name current
 	while read -r subject; do
-		if grep -qxF "$subject" <<<"$existing"; then
-			echo "    ok      ${subject}"
+		name=$(credential_name_for "$subject")
+		current=$(awk -v n="$name" -F'\t' '$1 == n { print $2 }' <<<"$existing")
+		if [[ "$current" == "$subject" ]]; then
+			echo "    ok      ${name}"
+		elif [[ -n "$current" ]]; then
+			echo "    STALE   ${name} -- subject changed; '${0##*/} create' updates it in place"
+			echo "              has   ${current}"
+			echo "              needs ${subject}"
+			missing=1
 		else
-			echo "    MISSING ${subject}"
+			echo "    MISSING ${name}  ${subject}"
 			missing=1
 		fi
 	done < <(subjects)
@@ -269,16 +282,48 @@ cmd_create() {
 		echo "  created  service principal ${sp_object_id}"
 	fi
 
+	# Keyed by NAME, not by subject. The name is the credential's stable identity -- one per
+	# role this repo mints -- while the subject is a value that can legitimately change under
+	# it, which is exactly what happened when GitHub moved this repo to immutable subjects.
+	# Matching on subject alone reports "missing", tries to create, and collides on the name
+	# that is already there:
+	#
+	#     ERROR: FederatedIdentityCredential with name github-pull-request already exists.
+	#
+	# So: absent by name -> create; present with the wrong subject -> update it in place.
+	# Update rather than delete-and-recreate, so a transient Graph failure cannot leave the
+	# app with no credential for a role at all.
 	echo "Federated credentials:"
 	local existing
-	existing=$(az ad app federated-credential list --id "$app_id" --query "[].subject" -o tsv 2>/dev/null || true)
-	local subject name
+	existing=$(az ad app federated-credential list --id "$app_id" \
+		--query "[].{name:name,subject:subject}" -o tsv 2>/dev/null || true)
+	local subject name current
 	while read -r subject; do
-		if grep -qxF "$subject" <<<"$existing"; then
-			echo "  ok       ${subject}"
+		name=$(credential_name_for "$subject")
+		current=$(awk -v n="$name" -F'\t' '$1 == n { print $2 }' <<<"$existing")
+
+		if [[ "$current" == "$subject" ]]; then
+			echo "  ok       ${name}  ${subject}"
 			continue
 		fi
-		name=$(credential_name_for "$subject")
+
+		if [[ -n "$current" ]]; then
+			az ad app federated-credential update --id "$app_id" --federated-credential-id "$name" \
+				--parameters @- >/dev/null <<JSON
+{
+  "name": "${name}",
+  "issuer": "${ISSUER}",
+  "subject": "${subject}",
+  "description": "GitHub Actions for ${REPO}",
+  "audiences": ["${AUDIENCE}"]
+}
+JSON
+			echo "  updated  ${name}"
+			echo "             was ${current}"
+			echo "             now ${subject}"
+			continue
+		fi
+
 		az ad app federated-credential create --id "$app_id" --parameters @- >/dev/null <<JSON
 {
   "name": "${name}",
@@ -288,7 +333,7 @@ cmd_create() {
   "audiences": ["${AUDIENCE}"]
 }
 JSON
-		echo "  created  ${subject}"
+		echo "  created  ${name}  ${subject}"
 	done < <(subjects)
 
 	echo "Role assignments:"
