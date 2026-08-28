@@ -98,6 +98,21 @@ Authentication is OIDC; there is no client secret. `bootstrap/github-oidc.bash` 
 app registration and federated credentials, and prints the three repository variables to
 set.
 
+`codeql.yml` is a deliberately narrow fourth workflow. CodeQL supports neither Terraform nor
+Bicep — the analysers do not exist — so the only thing in this repository it can read is the
+workflow files themselves, scanned as the `actions` language. That is worth having: a
+`${{ ... }}` expression interpolated into a `run:` block is a shell injection, and `plan.yml`
+builds its job summary out of exactly that shape. It is not worth dressing up. Listing
+languages the repository has no code in would turn the security tab green over an analysis
+of nothing, which is a worse outcome than no scan at all, because it looks like coverage.
+The Terraform is covered by `tflint` with the `azurerm` ruleset in `check.yml`.
+
+`.github/dependabot.yml` keeps the two things here that go stale current: the action
+versions the workflows pin, and the `azurerm` provider constraint. Weekly, one grouped pull
+request per ecosystem. The one thing to watch on a provider bump is the lock file — see
+AGENTS.md, "Dependency updates" — because Dependabot regenerates it and can leave it
+covering fewer platforms than the four this repo commits, in a way CI cannot see.
+
 ## Adding a subscription
 
 1. `mkdir azure/<name>/`, where `<name>` matches the subscription as `az account list`

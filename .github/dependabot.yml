@@ -1,0 +1,78 @@
+# Dependency updates. Two ecosystems, because two is all this repository has: the action
+# versions the three workflows pin, and the `azurerm` provider constraint the Terraform
+# modules declare. There is no application code here, so there is no lockfile of libraries
+# to keep current -- what goes stale in an IaC repo is the toolchain around it.
+#
+# Weekly, not daily. The whole surface is six pinned actions and one provider; a daily
+# cadence would spend more review attention on the notifications than on the changes.
+#
+# Each ecosystem is grouped into a single pull request. Ungrouped, a week where three
+# actions and the provider all moved is four PRs, four CI runs, and four `plan.yml` runs
+# against real Azure state. Grouped, it is one PR per ecosystem that either passes `check`
+# as a set or does not.
+version: 2
+updates:
+  # `directory: "/"` is not a shortcut here -- it is what the github-actions ecosystem
+  # wants. Dependabot resolves it to `/.github/workflows` plus a root-level
+  # `action.yml`/`action.yaml`; pointing it at `/.github/workflows` directly finds nothing.
+  #
+  # This is what keeps actions/checkout@v7, azure/login@v3, hashicorp/setup-terraform@v4,
+  # actions/upload-artifact@v7, actions/download-artifact@v8, terraform-linters/setup-tflint@v6
+  # and github/codeql-action@v4 from silently rotting on a deprecated runner image.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps/github-actions): "
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+
+  # `directories` (plural) takes a list and supports globs; `directory` (singular) takes
+  # one path and does not. Dependabot's Terraform support reads the `.tf` files in each
+  # directory it is given and does not recurse, so every directory with a
+  # `required_providers` block has to be listed.
+  #
+  # `/modules/quark` is here for completeness rather than for the pull requests. A shared
+  # module declares floors (`>= 5.0`), not pins, and a floor already admits every newer
+  # release -- so nothing there will usually need bumping. It is listed so that the day a
+  # module does constrain something, this file is already pointing at it.
+  #
+  # ---------------------------------------------------------------------------------
+  # Check the lock file diff on every Terraform pull request from this bot.
+  #
+  # `azure/autobutler/.terraform.lock.hcl` is committed and covers four platforms
+  # (linux_amd64, linux_arm64, darwin_amd64, darwin_arm64) because CI runs on linux and
+  # this team develops on darwin. Dependabot regenerates that lock itself when it moves the
+  # provider constraint, and it has to guess which platforms the existing lock covered: it
+  # re-runs `terraform providers lock` for each of linux_amd64, darwin_amd64, windows_amd64,
+  # darwin_arm64 and linux_arm64, keeps the ones whose `h1:` hashes match what is already in
+  # the file, and falls back to linux_amd64 *alone* if it matches none. All four of ours are
+  # in that candidate list, so the usual outcome is correct -- but it is a heuristic, and it
+  # has dropped platform hashes before (dependabot/dependabot-core#5225).
+  #
+  # The failure mode is quiet, which is why it is worth a note: a lock that shrank to
+  # linux_amd64 still passes every job in `check.yml` and `plan.yml`, because CI *is*
+  # linux_amd64. It breaks on the next `terraform init` at a darwin desk, with a checksum
+  # mismatch, at a moment unconnected to the merge that caused it.
+  #
+  # So: if the `h1:` list in a Dependabot lock diff got shorter, that is the bug, not a
+  # tidy-up. The repair is `gmake lock` on the branch -- see the `lock` target.
+  - package-ecosystem: terraform
+    directories:
+      - /azure/autobutler
+      - /modules/quark
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps/terraform): "
+    groups:
+      terraform:
+        patterns:
+          - "*"

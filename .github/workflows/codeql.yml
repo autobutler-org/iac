@@ -1,0 +1,77 @@
+# CodeQL, scanning exactly one language: `actions`, the workflows in this directory.
+#
+# That single-language matrix is the whole point of this file, so it is worth being blunt
+# about the boundary:
+#
+#   Covered.     `.github/workflows/*.yml`, analysed as GitHub Actions. The queries that
+#                earn their keep here are the expression-injection ones -- a `${{ ... }}`
+#                interpolated into a `run:` block is a shell injection, and this repo has
+#                `run:` steps that build a job summary out of template expressions. Also
+#                unpinned or untrusted action references, and workflow permissions wider
+#                than the job needs.
+#
+#   Not covered. Everything else in the repository. CodeQL has no Terraform/HCL analyser
+#                and no Bicep/ARM analyser -- the supported set is C/C++, C#, Go, Java or
+#                Kotlin, JavaScript or TypeScript, Python, Ruby, Rust, Swift and Actions,
+#                and neither HCL nor Bicep has ever been on it. So `azure/`, `modules/`
+#                and `bootstrap/` are invisible to this workflow.
+#
+# Which is why this file lists one language and not a matrix of hopeful ones. Adding
+# languages the repository has no code in does not produce a weaker analysis, it produces a
+# green check mark for an analysis of nothing -- and the security tab then reads as covered
+# when the Terraform, which is where the actual Azure risk lives, was never looked at.
+#
+# What does look at the Terraform is `tflint`, with the `azurerm` ruleset, configured in
+# `.tflint.hcl` and run by `make check/lint` in check.yml on every pull request. That is
+# the linter for deprecated arguments, invalid SKUs and locations, and missing
+# `prevent_destroy` on stateful resources. If someone goes looking for "why did CodeQL not
+# catch this Terraform problem" -- it never could; check.yml is where that answer lives.
+name: CodeQL
+on:
+  pull_request:
+    branches:
+      - main
+  # Same reasoning as check.yml: a pull request is the intended route onto main but not the
+  # only one, and code scanning needs a run on the default branch to have a baseline at all
+  # -- alerts are attributed against it, and a PR-only workflow never establishes one.
+  push:
+    branches:
+      - main
+  # Weekly, because the queries move even when the code does not. A scheduled run against
+  # an unchanged main is how a newly published query finds an old workflow.
+  schedule:
+    - cron: "23 6 * * 1"
+  workflow_dispatch:
+defaults:
+  run:
+    shell: bash
+permissions:
+  contents: read
+jobs:
+  analyze:
+    name: Analyze (actions)
+    runs-on: ubuntu-latest
+    permissions:
+      # security-events: write is what lets the analyse step upload the SARIF results to
+      # the repository's code scanning alerts. Nothing else here needs a write scope.
+      security-events: write
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: actions
+          # `actions` is an interpreted language as far as CodeQL is concerned: there is
+          # nothing to compile, so the database is built straight from the YAML.
+          build-mode: none
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          # The category namespaces the results, so a second language added here later
+          # lands in its own set of alerts rather than overwriting these.
+          category: "/language:actions"
