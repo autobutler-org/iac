@@ -102,13 +102,20 @@ Four workflows in `.github/workflows/`:
 | Workflow | Trigger | What it does |
 | --- | --- | --- |
 | `check.yml` | PR to `main`, manual | `make check/format`, `check/lint`, `check/validate`, `check/bicep` |
-| `plan.yml` | PR to `main`, `workflow_call` | `make init` + `make plan`, uploads the planfile, writes the plan into the job summary |
+| `plan.yml` | PR to `main`, `workflow_call` | `make init` + `make plan`, uploads the planfile, writes the plan into the job summary, and posts it as a sticky PR comment |
 | `apply.yml` | push to `main`, manual | calls `plan.yml`, then `make apply-from-planfile` on the planfile that job produced |
 | `codeql.yml` | PR to `main`, push to `main`, weekly, manual | CodeQL on the `actions` language — the workflows themselves, nothing else |
 
 `check.yml` needs **no Azure credentials** — `check/validate` inits with `-backend=false`,
 so it reads provider schemas and nothing else. Keep it that way; anything needing Azure
 belongs in `plan.yml`.
+
+The plan comment is one comment, edited in place on every push, found by a
+`<!-- terraform-plan -->` marker. A plan past 60,000 characters is not inlined -- an issue
+comment is capped at 65,536 and exceeding it fails the API call -- so the comment falls
+back to the `Plan:` summary line plus a link to the run, where the job summary carries the
+full text and the planfile artifact sits alongside it. The summary line survives either
+way; it is the thing a reviewer looks for first.
 
 `apply.yml` does not re-derive the plan. It runs `plan.yml` as a job and applies that
 job's planfile, which is named with the commit SHA, so what gets applied is provably what

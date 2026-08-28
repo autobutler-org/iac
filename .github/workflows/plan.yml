@@ -22,6 +22,9 @@ permissions:
   # id-token: write is what lets the job mint the OIDC token azure/login exchanges.
   id-token: write
   contents: read
+  # For the plan comment. Harmless on the workflow_call path from apply.yml: that runs on
+  # push, and the comment step is gated on the event being a pull_request.
+  pull-requests: write
 concurrency:
   group: ${{ github.repository }}-${{ github.workflow }}-${{ github.ref }}
   # A superseded plan is worth nothing, so cancelling one costs nothing. Contrast apply.yml.
@@ -61,6 +64,13 @@ jobs:
         run: |
           make plan
 
+      # Rendered once, into a file, because two things consume it: the job summary and the
+      # PR comment. Running `make plan/show` twice would be two chances to disagree.
+      - name: Render plan
+        run: |
+          make plan/show > plan.txt
+          echo "PLAN_LINES=$(wc -l < plan.txt)" >> "$GITHUB_ENV"
+
       # A planfile is opaque to a human reviewer. The job summary is the reviewable half.
       - name: Write plan to job summary
         run: |
@@ -68,11 +78,85 @@ jobs:
             echo "<details><summary>Terraform plan for \`${{ github.sha }}\`</summary>"
             echo
             echo '```terraform'
-            make plan/show
+            cat plan.txt
             echo '```'
             echo
             echo "</details>"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # The job summary is only visible to someone who clicks into the run. The comment
+      # brings the plan to where review actually happens.
+      #
+      # One sticky comment, found by the marker below and edited in place, rather than a new
+      # one per push -- a long-lived PR would otherwise accumulate a stack of stale plans
+      # with the current one buried at the bottom.
+      #
+      # github-script rather than a third-party commenting action: it is first-party, and
+      # this needs real logic (find-or-create, size fallback) that a declarative action
+      # would not give.
+      - name: Comment plan on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const fs = require('fs');
+
+            // A GitHub issue comment body is capped at 65536 characters. The budget below
+            // is what is left for the plan text once the wrapper -- heading, fences,
+            // details element, marker -- is accounted for, with room to spare. Exceeding
+            // the cap fails the API call outright, so this must not be tight.
+            const BODY_LIMIT = 60000;
+            const MARKER = '<!-- terraform-plan -->';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            const plan = fs.readFileSync('plan.txt', 'utf8');
+
+            // The one line a reviewer looks for first, and the one line that must survive
+            // even when the plan itself does not fit.
+            const summaryLine =
+              plan.split('\n').reverse().find(l => /^(Plan:|No changes\.|Error:)/.test(l.trim()))
+              ?? 'Plan summary not found -- see the full output.';
+
+            const body = plan.length <= BODY_LIMIT
+              ? [
+                  MARKER,
+                  `### Terraform plan \`${context.sha.slice(0, 7)}\``,
+                  '',
+                  `**${summaryLine.trim()}**`,
+                  '',
+                  '<details><summary>Full plan</summary>',
+                  '',
+                  '```terraform',
+                  plan,
+                  '```',
+                  '',
+                  '</details>',
+                ].join('\n')
+              : [
+                  MARKER,
+                  `### Terraform plan \`${context.sha.slice(0, 7)}\``,
+                  '',
+                  `**${summaryLine.trim()}**`,
+                  '',
+                  `The full plan is ${plan.length.toLocaleString()} characters, past the ` +
+                  `${BODY_LIMIT.toLocaleString()}-character limit for a comment, so it is not inlined here.`,
+                  '',
+                  `- **[Job summary and logs for this run](${runUrl})** -- the complete plan is rendered there, no download needed.`,
+                  `- The \`planfile-${context.sha}\` artifact on that page is the binary planfile the apply consumes.`,
+                ].join('\n');
+
+            const { data: comments } = await github.rest.issues.listComments({
+              ...context.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+            const existing = comments.find(c => c.body.includes(MARKER));
+
+            if (existing) {
+              await github.rest.issues.updateComment({ ...context.repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
+            }
 
       # Named with the commit SHA so apply.yml can prove it is applying the plan for the
       # commit it is actually running on, rather than whatever plan happened to be latest.

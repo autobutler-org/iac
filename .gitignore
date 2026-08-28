@@ -30,3 +30,7 @@ generated.tf
 # Compiled output of `az bicep build`. The .bicep source is the artifact; the ARM JSON is
 # generated on demand by `make check/bicep`.
 bootstrap/**/*.json
+
+# Agent worktrees. Each is its own git checkout; committing one embeds a repository
+# inside this one, which clones cannot resolve.
+.claude/worktrees/
