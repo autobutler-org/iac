@@ -97,13 +97,14 @@ must lock.
 
 ## CI
 
-Three workflows in `.github/workflows/`:
+Four workflows in `.github/workflows/`:
 
 | Workflow | Trigger | What it does |
 | --- | --- | --- |
 | `check.yml` | PR to `main`, manual | `make check/format`, `check/lint`, `check/validate`, `check/bicep` |
 | `plan.yml` | PR to `main`, `workflow_call` | `make init` + `make plan`, uploads the planfile, writes the plan into the job summary |
 | `apply.yml` | push to `main`, manual | calls `plan.yml`, then `make apply-from-planfile` on the planfile that job produced |
+| `codeql.yml` | PR to `main`, push to `main`, weekly, manual | CodeQL on the `actions` language — the workflows themselves, nothing else |
 
 `check.yml` needs **no Azure credentials** — `check/validate` inits with `-backend=false`,
 so it reads provider schemas and nothing else. Keep it that way; anything needing Azure
@@ -121,6 +122,27 @@ registration and federated credentials this depends on.
 
 `concurrency` differs between the two on purpose: a superseded plan is cancelled, an apply
 never is. A half-applied change is worse than a queued one.
+
+`codeql.yml` scans **only** the `actions` language, and that is deliberate. CodeQL has no
+Terraform/HCL analyser and no Bicep analyser, so `azure/`, `modules/` and `bootstrap/` are
+invisible to it; the workflows in `.github/workflows/` are the one thing here it can read,
+where it catches expression injection into `run:` blocks and over-broad job permissions. Do
+not add languages to that matrix to make the security tab look fuller — an analysis of
+nothing reads exactly like an analysis that found nothing. What lints the Terraform is
+`tflint` with the `azurerm` ruleset, in `check.yml`.
+
+## Dependency updates
+
+`.github/dependabot.yml` covers the two ecosystems this repo has: `github-actions` (the
+action versions the workflows pin) and `terraform` (the `azurerm` provider constraint).
+Weekly, grouped into one pull request per ecosystem.
+
+**Check the lock file diff on every Terraform update from Dependabot.** Dependabot
+regenerates `.terraform.lock.hcl` when it moves a provider constraint, and it has to infer
+which platforms the existing lock covered — falling back to `linux_amd64` alone if it infers
+none. A lock that shrank that way still passes every CI job, because CI is `linux_amd64`; it
+breaks the next `terraform init` on a darwin machine with a checksum mismatch, long after
+the merge that caused it. If the `h1:` list got shorter, run `make lock` on the branch.
 
 ## Plan locally, apply through CI
 
@@ -143,7 +165,8 @@ a half-applied change.
 `.terraform.lock.hcl` **is** committed, and it covers four platforms (`linux_amd64`,
 `linux_arm64`, `darwin_amd64`, `darwin_arm64`). A plain `terraform init` on one machine
 shrinks it to that machine's platform; if a diff drops platform hashes, that is a
-regression, not a cleanup. Regenerate with `make lock`.
+regression, not a cleanup. Regenerate with `make lock`. A Dependabot provider bump can
+shrink it the same way — see **Dependency updates** under CI.
 
 ## Importing existing Azure resources
 
