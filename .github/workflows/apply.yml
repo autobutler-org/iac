@@ -24,9 +24,17 @@ env:
 jobs:
   plan:
     uses: ./.github/workflows/plan.yml
+    # pull-requests: write is granted even though this path never comments -- the comment
+    # step in plan.yml is gated on the event being a pull_request, and this runs on push.
+    #
+    # It is required anyway. A called workflow cannot request a permission its caller does
+    # not grant, and that contract is checked when the run is loaded, before any step-level
+    # `if` is evaluated. Omitting it does not produce a skipped step; it produces a
+    # startup_failure with no logs, no jobs, and nothing to read but "workflow file issue".
     permissions:
       id-token: write
       contents: read
+      pull-requests: write
     secrets: inherit
 
   apply:
