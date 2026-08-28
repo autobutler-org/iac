@@ -1,5 +1,9 @@
 # Headscale control server for the quark tailnet.
 #
+# modules/headscale/README.md is the contract with the quark codebase: the endpoints it
+# exposes, the constant in remoteutil.go that has to point at them, and the two secrets
+# the provisioning service needs post-boot. Read it before changing a domain here.
+#
 # The resource group already existed (created by hand alongside the autobutler one) and is
 # adopted in imports.tf rather than created here -- see the comment there.
 #
