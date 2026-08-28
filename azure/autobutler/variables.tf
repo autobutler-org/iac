@@ -13,19 +13,19 @@ variable "tags" {
 variable "quark_headscale_domain" {
   description = "Public FQDN the quark tailnet's headscale control server is reached on. An A record for it must point at the module's public IP before TLS can be issued."
   type        = string
-  default     = "network.quark.org"
+  default     = "network.quark.autobutler.org"
 }
 
 variable "quark_headscale_base_domain" {
   description = "MagicDNS base domain headscale hands out to nodes on the quark tailnet."
   type        = string
-  default     = "headscale.quark.org"
+  default     = "headscale.quark.autobutler.org"
 }
 
 variable "quark_headscale_admin_email" {
   description = "Email registered with Let's Encrypt for expiry notices on the quark headscale certificate."
   type        = string
-  default     = "admin@quark.org"
+  default     = "admin@autobutler.org"
 }
 
 variable "quark_headscale_ssh_public_key" {
