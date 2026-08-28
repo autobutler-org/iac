@@ -22,8 +22,10 @@ permissions:
   # id-token: write is what lets the job mint the OIDC token azure/login exchanges.
   id-token: write
   contents: read
-  # For the plan comment. Harmless on the workflow_call path from apply.yml: that runs on
-  # push, and the comment step is gated on the event being a pull_request.
+  # For the plan comment. Every caller must grant this too, including apply.yml on the
+  # workflow_call path where the comment step never runs -- a called workflow cannot
+  # request more than its caller grants, and that is enforced at load time rather than
+  # when the gated step would have run.
   pull-requests: write
 concurrency:
   group: ${{ github.repository }}-${{ github.workflow }}-${{ github.ref }}
