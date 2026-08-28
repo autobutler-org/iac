@@ -6,7 +6,7 @@ Azure infrastructure for autobutler-org, as Terraform against the `azurerm` prov
 
 ## Layout
 
-```
+```text
 azure/<subscription>/     one Azure subscription, one root module, one state file
 modules/<name>/           shared modules, referenced with a relative source
 bootstrap/                Bicep for the terraform state backend, and the CI identity script

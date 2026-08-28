@@ -1,0 +1,37 @@
+# Markdown lint rules, taken from the sibling quark repo so prose conventions match across
+# autobutler-org rather than drifting per repository.
+#
+# Every rule is on by default; the entries below are the deliberate exceptions.
+default: true
+
+# Two spaces per nesting level, matching .editorconfig's indent_size for everything else
+# here that is not HCL.
+MD007:
+  indent: 2
+
+# 120 columns. The prose in this repo already wraps near there, and the comments in the
+# .tf and .bicep files it documents are written to the same width -- a README that wrapped
+# differently from the code it describes reads as two documents.
+MD013:
+  line_length: 120
+  # The one addition to quark's config. A table row has no line-continuation syntax in
+  # Markdown -- the only way to shorten one is to say less in a cell. AGENTS.md's workflow
+  # table pays for that: three rows run past 120 because a trigger list and a one-line
+  # summary of what a workflow does are both irreducible. Wrapping is impossible, so the
+  # rule can only be satisfied by degrading the content, which is the signal that it does
+  # not apply here. Prose is still held to 120.
+  tables: false
+
+# Duplicate headings are fine when they sit under different parents. bootstrap/README.md
+# and modules/*/README.md both want a "Verify" or "Operating notes" under more than one
+# section, and numbering them to satisfy a linter makes them worse to skim.
+MD024:
+  siblings_only: true
+
+# Inline HTML stays allowed: <details> blocks are how the long plan and runbook output in
+# these READMEs stays collapsible on GitHub, and there is no Markdown equivalent.
+MD033: false
+
+# First line need not be a top-level heading. CLAUDE.md is a single `@AGENTS.md` include
+# and has no heading at all, by design.
+MD041: false

@@ -22,7 +22,7 @@ Terraform.
 
 ## File layout
 
-```
+```text
 azure/<subscription>/     one Azure subscription, one root module, one state file
 modules/<name>/           shared modules, referenced with a relative source
 bootstrap/                Bicep for the terraform state backend
@@ -101,8 +101,8 @@ Four workflows in `.github/workflows/`:
 
 | Workflow | Trigger | What it does |
 | --- | --- | --- |
-| `check.yml` | PR to `main`, manual | `make check/format`, `check/lint`, `check/validate`, `check/bicep` |
-| `plan.yml` | PR to `main`, `workflow_call` | `make init` + `make plan`, uploads the planfile, writes the plan into the job summary, and posts it as a sticky PR comment |
+| `check.yml` | PR to `main`, push to `main`, manual | `make check/format`, `check/lint`, `check/markdown`, `check/bicep`, `check/validate` |
+| `plan.yml` | PR to `main`, `workflow_call` | `make init` + `make plan`; uploads the planfile, and posts the plan to the job summary and a sticky PR comment |
 | `apply.yml` | push to `main`, manual | calls `plan.yml`, then `make apply-from-planfile` on the planfile that job produced |
 | `codeql.yml` | PR to `main`, push to `main`, weekly, manual | CodeQL on the `actions` language — the workflows themselves, nothing else |
 
@@ -140,9 +140,15 @@ nothing reads exactly like an analysis that found nothing. What lints the Terraf
 
 ## Dependency updates
 
-`.github/dependabot.yml` covers the two ecosystems this repo has: `github-actions` (the
-action versions the workflows pin) and `terraform` (the `azurerm` provider constraint).
-Weekly, grouped into one pull request per ecosystem.
+`.github/dependabot.yml` covers the three ecosystems this repo has: `github-actions` (the
+action versions the workflows pin), `terraform` (the `azurerm` provider constraint) and
+`npm` (`markdownlint-cli2`, the one devDependency). Weekly, grouped into one pull request
+per ecosystem.
+
+A `markdownlint-cli2` bump can fail `check/markdown` on Markdown nobody edited, because a
+minor release may add or tighten rules. That is the tool working. Fix the prose, or turn
+off the single new rule in `.markdownlint.yaml` with a comment saying why — never blanket-
+disable, same as the tflint policy below.
 
 **Check the lock file diff on every Terraform update from Dependabot.** Dependabot
 regenerates `.terraform.lock.hcl` when it moves a provider constraint, and it has to infer
@@ -202,6 +208,13 @@ manager ID (`.../storageAccounts/<name>/blobServices/default/containers/<name>`)
 data-plane URL.
 
 ## Linting
+
+Markdown is linted too, by `markdownlint-cli2` against `.markdownlint.yaml`, via
+`make check/markdown`. The rules are quark's, so prose conventions match across
+autobutler-org, plus `MD013 tables: false` — a Markdown table row has no line-continuation,
+so the only way to shorten one is to say less in a cell. `make fix/markdown` applies what
+is auto-fixable, which is not line length or fence languages. The tool is pinned exactly in
+`package.json` and installed with `npm ci`, so CI and your desk apply identical rules.
 
 `.tflint.hcl` runs the full `terraform` ruleset plus the `azurerm` ruleset, with the strict
 rules **on** deliberately — documented variables and outputs, no unused declarations,

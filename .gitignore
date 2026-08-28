@@ -34,3 +34,7 @@ bootstrap/**/*.json
 # Agent worktrees. Each is its own git checkout; committing one embeds a repository
 # inside this one, which clones cannot resolve.
 .claude/worktrees/
+
+# Node modules for the markdown linter. package-lock.json IS committed, so the version is
+# pinned; the tree it installs is not.
+node_modules/

@@ -1,0 +1,12 @@
+{
+  "name": "iac",
+  "private": true,
+  "description": "Node tooling for the autobutler infrastructure repo. Markdown linting only -- there is no application code here.",
+  "scripts": {
+    "check:markdown": "markdownlint-cli2 \"**/*.md\" \"!node_modules\" \"!.claude\"",
+    "fix:markdown": "markdownlint-cli2 --fix \"**/*.md\" \"!node_modules\" \"!.claude\""
+  },
+  "devDependencies": {
+    "markdownlint-cli2": "0.23.2"
+  }
+}

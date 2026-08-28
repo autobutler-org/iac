@@ -1,10 +1,11 @@
-# Dependency updates. Two ecosystems, because two is all this repository has: the action
-# versions the three workflows pin, and the `azurerm` provider constraint the Terraform
-# modules declare. There is no application code here, so there is no lockfile of libraries
-# to keep current -- what goes stale in an IaC repo is the toolchain around it.
+# Dependency updates. Three ecosystems, because three is all this repository has: the
+# action versions the workflows pin, the `azurerm` provider constraint the Terraform
+# modules declare, and the one npm devDependency that lints the Markdown. There is no
+# application code here -- what goes stale in an IaC repo is the toolchain around it.
 #
-# Weekly, not daily. The whole surface is six pinned actions and one provider; a daily
-# cadence would spend more review attention on the notifications than on the changes.
+# Weekly, not daily. The whole surface is a handful of pinned actions, one provider and one
+# devDependency; a daily cadence would spend more review attention on the notifications
+# than on the changes.
 #
 # Each ecosystem is grouped into a single pull request. Ungrouped, a week where three
 # actions and the provider all moved is four PRs, four CI runs, and four `plan.yml` runs
@@ -74,5 +75,26 @@ updates:
       prefix: "chore(deps/terraform): "
     groups:
       terraform:
+        patterns:
+          - "*"
+
+  # One devDependency, markdownlint-cli2, pinned exactly rather than by range so CI and a
+  # developer's desk apply identical rules. An exact pin cannot float, which is precisely
+  # why it needs Dependabot: nothing else would ever move it.
+  #
+  # A markdownlint minor release can add rules or tighten existing ones, so an update here
+  # can fail `check/markdown` on Markdown nobody touched. That is the tool working -- fix
+  # the prose, or turn off the single new rule in .markdownlint.yaml with a comment saying
+  # why, the same policy the tflint rules follow.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps/npm): "
+    groups:
+      npm:
         patterns:
           - "*"
