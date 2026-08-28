@@ -2,26 +2,22 @@ resource "azurerm_linux_virtual_machine" "this" {
   name                = local.name
   resource_group_name = var.resource_group_name
   location            = var.location
-  # The default, Standard_B1s, is announced for retirement and tflint is right to say so.
-  # It is kept anyway, deliberately, and suppressed here rather than by switching the rule
-  # off repo-wide -- the warning is correct everywhere else and this is the one place that
-  # has an answer for it.
+  # Standard_B2pts_v2: 2 vCPU, 1 GiB, Arm64, burstable. It is the successor to the
+  # Standard_B1s this replaced -- double the vCPU, the same memory, and cheaper
+  # ($6.13/mo against $7.59 at eastus list price).
   #
-  # The alternatives, checked against what this subscription can actually deploy in eastus:
+  # Arm64 is not a preference here, it is the only burstable option. eastus offers no x64
+  # Bsv2 at all (no B2ts_v2, B2ls_v2 or B2s_v2), and the entire v1 B-series is retiring
+  # together, so there is no x64 burstable left to move to. The x64 alternatives are all
+  # non-burstable and cost far more for a host whose whole job is relaying control-plane
+  # traffic: D2als_v6 is $58.69/mo, D2s_v5 $70.08.
   #
-  #   every x64 burstable size  B1s/B1ms/B2s/B2ms are all flagged; the whole v1 B-series is
-  #                             retiring together, so moving within it buys nothing
-  #   Standard_B1ls             not flagged, but 0.5 GB RAM cannot compile the provisioning
-  #                             binary -- the Go toolchain alone will not fit
-  #   Bsv2 (B2ts_v2 et al)      not offered here in x64; eastus lists only Arm64 variants,
-  #                             and the setup script fetches linux-amd64 Go and an amd64
-  #                             headscale .deb, so that is a script change, not a size change
-  #   Standard_D2s_v5           not flagged and would work, at roughly seven times the cost
-  #                             of a host whose entire job is to relay control-plane traffic
+  # headscale publishes a linux_arm64 .deb and Go a linux-arm64 toolchain, so nothing in
+  # the setup script needs a fallback -- see var.vm_architecture, which drives both.
   #
-  # So: match the existing autobutler host until the Arm64 move is made deliberately, which
-  # is the real fix and wants its own change.
-  # tflint-ignore: azurerm_linux_virtual_machine_retired_size
+  # Memory is the thing to watch, not the architecture: 1 GiB is unchanged from B1s, and
+  # the script compiles the provisioning binary on the host. If that ever OOMs, the next
+  # step is Standard_B2pls_v2 (4 GiB, $24.53/mo), not a return to x64.
   size           = var.vm_size
   admin_username = var.admin_username
   network_interface_ids = [
@@ -47,7 +43,7 @@ resource "azurerm_linux_virtual_machine" "this" {
   source_image_reference {
     publisher = "Canonical"
     offer     = "ubuntu-24_04-lts"
-    sku       = "server"
+    sku       = local.image_sku
     version   = "latest"
   }
 

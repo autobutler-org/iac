@@ -45,7 +45,7 @@ apt-get install -y -qq \
 # -- 2. Go -----------------------------------------------------------------
 log "Installing Go..."
 GO_VERSION=${go_version}
-wget -q -O /tmp/go.tar.gz "https://go.dev/dl/go$${GO_VERSION}.linux-amd64.tar.gz"
+wget -q -O /tmp/go.tar.gz "https://go.dev/dl/go$${GO_VERSION}.linux-${arch}.tar.gz"
 rm -rf /usr/local/go
 tar -C /usr/local -xzf /tmp/go.tar.gz
 export PATH=/usr/local/go/bin:$PATH
@@ -58,7 +58,7 @@ log "Installing Headscale..."
 HS_VERSION=${headscale_version}
 HS_VER="$${HS_VERSION#v}"
 retry wget -q -O /tmp/headscale.deb \
-  "https://github.com/juanfont/headscale/releases/download/$${HS_VERSION}/headscale_$${HS_VER}_linux_amd64.deb"
+  "https://github.com/juanfont/headscale/releases/download/$${HS_VERSION}/headscale_$${HS_VER}_linux_${arch}.deb"
 dpkg -i /tmp/headscale.deb
 
 mkdir -p /etc/headscale /var/lib/headscale

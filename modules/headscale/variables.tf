@@ -15,14 +15,14 @@ variable "location" {
 }
 
 variable "headscale_domain" {
-  description = "Public FQDN clients reach headscale on, e.g. network.quark.org. Becomes server_url in the headscale config, the nginx server_name, and the certbot certificate name. An A record for it must point at the module's public IP output before TLS can be issued."
+  description = "Public FQDN clients reach headscale on, e.g. network.quark.autobutler.org. Becomes server_url in the headscale config, the nginx server_name, and the certbot certificate name. An A record for it must point at the module's public IP output before TLS can be issued."
   type        = string
 }
 
 variable "headscale_base_domain" {
-  description = "MagicDNS base domain headscale hands out to nodes, e.g. headscale.quark.org. Must differ from headscale_domain -- a node named the same as the control server would shadow it in DNS."
+  description = "MagicDNS base domain headscale hands out to nodes, e.g. headscale.quark.autobutler.org. Must differ from headscale_domain -- a node named the same as the control server would shadow it in DNS."
   type        = string
-  default     = "headscale.quark.org"
+  default     = "headscale.example.org"
 }
 
 variable "admin_email" {
@@ -42,9 +42,20 @@ variable "admin_ssh_public_key" {
 }
 
 variable "vm_size" {
-  description = "Azure VM SKU. headscale is a control plane only -- peer traffic goes direct over WireGuard and never touches this host -- so the default is deliberately small."
+  description = "Azure VM SKU. headscale is a control plane only -- peer traffic goes direct over WireGuard and never touches this host -- so the default is deliberately small. Must match var.vm_architecture."
   type        = string
-  default     = "Standard_B1s"
+  default     = "Standard_B2pts_v2"
+}
+
+variable "vm_architecture" {
+  description = "CPU architecture of vm_size. Selects the Ubuntu image SKU and the Go and headscale downloads, so it cannot drift from the size."
+  type        = string
+  default     = "arm64"
+
+  validation {
+    condition     = contains(["arm64", "amd64"], var.vm_architecture)
+    error_message = "vm_architecture must be \"arm64\" or \"amd64\"."
+  }
 }
 
 variable "os_disk_storage_account_type" {

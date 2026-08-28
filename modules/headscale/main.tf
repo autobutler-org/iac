@@ -20,12 +20,22 @@ locals {
   # in a subscription without collisions.
   name = var.name_prefix
 
+  # One knob drives all four. Setting the size to an Arm SKU and leaving the image or the
+  # downloads on amd64 produces a VM that boots and then fails inside the setup script --
+  # a dpkg architecture error buried in extension logs, not a plan-time failure. Deriving
+  # them makes that combination unrepresentable.
+  #
+  # Go and Debian happen to agree on "arm64"/"amd64"; the Azure image SKU does not, hence
+  # the lookup rather than string interpolation.
+  image_sku = var.vm_architecture == "arm64" ? "server-arm64" : "server"
+
   # Rendered here rather than inline in the extension so the settings block stays readable,
   # and so a `terraform console` can print the script that would actually be sent.
   setup_script = templatefile("${path.module}/templates/setup-headscale.bash.tftpl", {
     domain               = var.headscale_domain
     base_domain          = var.headscale_base_domain
     admin_email          = var.admin_email
+    arch                 = var.vm_architecture
     go_version           = var.go_version
     headscale_version    = var.headscale_version
     repo_url             = var.provisioning_repo_url
