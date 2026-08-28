@@ -10,6 +10,13 @@ on:
   pull_request:
     branches:
       - main
+  # Also on push to main. A PR is the intended route onto main, but it is not the only one
+  # -- a direct push, an admin merge, or the very first commit to an empty repository all
+  # reach main without a PR ever running. Since apply.yml fires on exactly those pushes,
+  # PR-only checks would let an apply run against code nothing had linted.
+  push:
+    branches:
+      - main
   workflow_dispatch:
 defaults:
   run:

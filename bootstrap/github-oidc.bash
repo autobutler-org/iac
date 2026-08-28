@@ -45,9 +45,11 @@ Options:
 What 'create' does:
   1. App registration + service principal named '${APP_NAME}'.
   2. Three federated credentials, one per subject GitHub Actions mints here:
-       repo:<repo>:pull_request              plan.yml on a pull request
-       repo:<repo>:ref:refs/heads/main       apply.yml on push to main
-       repo:<repo>:environment:<environment> apply.yml's gated apply job
+       <prefix>:pull_request              plan.yml on a pull request
+       <prefix>:ref:refs/heads/main       apply.yml on push to main
+       <prefix>:environment:<environment> apply.yml's gated apply job
+     <prefix> is read from GitHub, not assumed -- it may embed immutable owner and
+     repository IDs (repo:owner@123/repo@456) rather than being repo:owner/repo.
   3. Contributor on the subscription, so terraform can manage resources.
   4. Storage Blob Data Contributor on the state account, so terraform can read, write and
      lease the state blob.
@@ -90,10 +92,37 @@ parse_args() {
 	done
 }
 
+# The subject prefix is NOT always "repo:<owner>/<repo>". GitHub now mints immutable
+# subjects for many repositories, embedding the numeric owner and repository IDs:
+#
+#     repo:autobutler-org@217851255/iac@1349061815:ref:refs/heads/main
+#
+# A credential registered with the classic prefix is then never matched, and the failure is
+# an AADSTS700213 at login that names the presented subject but not the fix. Ask GitHub what
+# prefix it actually uses rather than assuming; the API reports it whichever form is in play,
+# and immutable subjects survive a repo or org rename, which the classic form does not.
+#
+# Falls back to the classic form only when the API is unreachable, and says so -- a silent
+# fallback here reintroduces exactly the bug this exists to avoid.
+sub_claim_prefix() {
+	local prefix
+	if prefix=$(gh api "repos/${REPO}/actions/oidc/customization/sub" \
+		--jq '.sub_claim_prefix // empty' 2>/dev/null) && [[ -n "$prefix" ]]; then
+		echo "$prefix"
+		return
+	fi
+	echo "warning: could not read the OIDC subject prefix from GitHub; assuming 'repo:${REPO}'." >&2
+	echo "         If login fails with AADSTS700213, compare the subject in that error against" >&2
+	echo "         'gh api repos/${REPO}/actions/oidc/customization/sub'." >&2
+	echo "repo:${REPO}"
+}
+
 subjects() {
-	echo "repo:${REPO}:pull_request"
-	echo "repo:${REPO}:ref:refs/heads/main"
-	echo "repo:${REPO}:environment:${ENVIRONMENT}"
+	local prefix
+	prefix=$(sub_claim_prefix)
+	echo "${prefix}:pull_request"
+	echo "${prefix}:ref:refs/heads/main"
+	echo "${prefix}:environment:${ENVIRONMENT}"
 }
 
 # Federated credential names have to be stable across runs for this to stay idempotent, and
