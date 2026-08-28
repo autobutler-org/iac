@@ -129,7 +129,7 @@ prefix, so public container-level access is the transport, not an oversight. The
 because the failure mode is every installed client in the field silently losing the ability
 to update, with nothing in this repo failing.
 
-These resources predate this repo and are adopted through `import` blocks in
-`azure/autobutler/imports.tf` rather than created. Until that import is applied, `make plan`
-shows three imports plus a tag addition — the live resources carry no tags and the root
-module tags everything it manages.
+These resources predate this repo. They were adopted through `import` blocks rather than
+created, and that adoption is done — state holds all three and `make plan` is clean. The
+`import` blocks have been removed; see "Adopting an existing resource" for the loop to
+follow next time.

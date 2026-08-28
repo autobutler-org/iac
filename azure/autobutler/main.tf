@@ -1,7 +1,7 @@
 locals {
-  # Applied to everything this root module manages. The imported resources carry no tags
-  # today, so the first apply after the import will add these -- a real but benign diff,
-  # visible in the plan. See imports.tf.
+  # Applied to everything this root module manages. Anything adopted from a hand-built
+  # resource picks these up on the apply that adopts it, which shows as a tag diff in the
+  # plan -- expected, not drift.
   tags = merge(
     {
       managed_by   = "terraform"
