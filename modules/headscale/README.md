@@ -13,7 +13,7 @@ here to make quark talk to a server this module built, everything you need is be
 | --- | --- |
 | Control server (`server_url`) | `https://network.quark.ts.autobutler.org` |
 | MagicDNS base (`base_domain`) | `headscale.quark.ts.autobutler.org` |
-| Provisioning API | `http://<control server>:8081` |
+| Provisioning API | `https://network.quark.ts.autobutler.org/provision` |
 | Azure fallback FQDN | `quark-headscale.eastus.cloudapp.azure.com` |
 
 The control server and the MagicDNS base are deliberately **siblings** — neither contains
@@ -32,10 +32,20 @@ be given one.
 | 80 | TCP | ACME HTTP-01 challenge, redirects to 443 once a certificate exists |
 | 443 | TCP | headscale, behind nginx |
 | 3478 | UDP | STUN, for NAT traversal |
-| 8081 | TCP | quark provisioning service |
 
 headscale's gRPC (50443) is **not** exposed. It listens on `127.0.0.1:50443`, so a public
 rule would grant nothing; reach it over SSH if you need remote CLI admin.
+
+The provisioning service is not exposed either. It listens on `127.0.0.1:8081`, and nginx
+proxies `https://<control server>/provision` to it, so the shared secret only ever crosses
+the internet inside TLS.
+
+## ACL policy
+
+headscale loads `/etc/headscale/policy.hujson`, which the setup script writes as
+`{"acls": []}` — deny all. No node can reach any other node, including nodes owned by the
+same person. That is deliberate until there is a design for how an owner's clients join
+the tailnet. Note that omitting `acls` entirely means the opposite, allow-all.
 
 ## What quark has to change
 
@@ -57,14 +67,17 @@ different tailnet without a code change. The constant is the default, not the on
 
 ## What the provisioning service needs
 
-`cmd/provisioning/main.go` reads five environment variables. The systemd unit this module
-installs sets the first two; **the two required ones it cannot set**, because neither value
-can exist before the host is running:
+The systemd unit this module installs sets the first three variables below; **the two
+required ones it cannot set**, because neither value can exist before the host is running.
+`PROVISIONING_LISTEN_ADDR` and `HEADSCALE_USER` need autobutler-org/quark#1876; a binary
+built from an earlier ref ignores them, listening on `:8081` and minting keys for
+`autobutler`. Bump `provisioning_repo_ref` once a release carries that change.
 
 | Variable | Set by | Required |
 | --- | --- | --- |
 | `HEADSCALE_URL` | the unit (`http://127.0.0.1:8080`) | no, has a default |
-| `PORT` | the unit (`8081`) | ignored — `main.go` hardcodes `:8081` |
+| `PROVISIONING_LISTEN_ADDR` | the unit (`127.0.0.1:8081`) | no, defaults to `:8081` |
+| `HEADSCALE_USER` | the unit (`quark`) | no, defaults to `quark` |
 | `HEADSCALE_API_KEY` | **you, post-boot** | yes — `log.Fatal` without it |
 | `PROVISIONING_SECRET` | **you, post-boot** | yes — `log.Fatal` without it |
 | `PROVISIONING_KEY_EXPIRY_HOURS` | optional | no |
@@ -72,10 +85,10 @@ can exist before the host is running:
 Both required variables go in `${config_dir}/provisioning.env`, which the unit loads with
 `EnvironmentFile=-` so a missing file is not fatal at boot.
 
-> **This is the step that catches people.** The setup script's own post-deploy notes, and
-> the README this module was ported from, mention only `HEADSCALE_API_KEY`. Set just that
-> one and the service still exits immediately on `PROVISIONING_SECRET`, with a message that
-> reads like a fresh problem rather than an incomplete instruction. Set both.
+> **This is the step that catches people.** The README this module was ported from
+> mentions only `HEADSCALE_API_KEY`. Set just that one and the service still exits
+> immediately on `PROVISIONING_SECRET`, with a message that reads like a fresh problem
+> rather than an incomplete instruction. Set both.
 
 ## Bringing a server up
 
@@ -112,7 +125,8 @@ Both required variables go in `${config_dir}/provisioning.env`, which the unit l
    The API key cannot be generated before headscale first runs, which is why this is a
    post-boot step and not something the module can do.
 
-5. **Create the tailnet user** headscale registers nodes under:
+5. **Create the tailnet user** headscale registers nodes under. It must match
+   `HEADSCALE_USER` in the unit:
 
    ```bash
    sudo headscale users create quark
@@ -124,8 +138,11 @@ Clients call the provisioning service, which mints a headscale pre-auth key on t
 so the headscale API key never leaves the server:
 
 ```http
-POST http://network.quark.ts.autobutler.org:8081/provision
+POST https://network.quark.ts.autobutler.org/provision
 X-Provisioning-Secret: <PROVISIONING_SECRET>
+Content-Type: application/json
+
+{"device_id": "<stable per-device id>"}
 ```
 
 The shared secret is what authorises that call, so it is a real credential: it is the only

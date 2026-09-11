@@ -61,11 +61,12 @@ This is the actual proof. Create a user and a short-lived key on the server:
 
 ```bash
 sudo headscale users create quark
-sudo headscale preauthkeys create --user quark --expiration 1h
+sudo headscale users list                     # note the ID of quark
+sudo headscale preauthkeys create --user <id> --expiration 1h
 ```
 
-> The `--user` flag has changed across headscale releases -- it has taken a name and an ID at different points.
-> Check `headscale preauthkeys create --help` on the host rather than trusting this line.
+> In v0.28.0 `--user` takes the numeric user ID, not the name. It has taken a name at other points, so check
+> `headscale preauthkeys create --help` on the host after a version bump.
 
 Then join from anywhere. A container is cleanest: nothing is installed on your machine, and the node is gone when
 it exits.
@@ -91,9 +92,13 @@ secrets exist -- `cmd/provisioning/main.go` calls `log.Fatal` on each:
 
 ```bash
 sudo systemctl status quark-provisioning
-curl -s -X POST http://network.quark.ts.autobutler.org:8081/provision \
-  -H "X-Provisioning-Secret: <secret>" -d '{}'
+curl -s -X POST https://network.quark.ts.autobutler.org/provision \
+  -H "X-Provisioning-Secret: <secret>" \
+  -H "Content-Type: application/json" \
+  -d '{"device_id": "verify-layer-4"}'
 ```
+
+A `200` carries an `auth_key`. The service allows five calls per hour, so do not loop this.
 
 If layer 3 passes and layer 4 fails, the tailnet is fine and the problem is quark's service. See
 `modules/headscale/README.md` for the two variables it needs.

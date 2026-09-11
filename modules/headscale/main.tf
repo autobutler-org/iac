@@ -39,7 +39,7 @@ locals {
     go_version           = var.go_version
     headscale_version    = var.headscale_version
     repo_url             = var.provisioning_repo_url
-    repo_branch          = var.provisioning_repo_branch
+    repo_ref             = var.provisioning_repo_ref
     provisioning_package = var.provisioning_package
     service_name         = var.provisioning_service_name
     source_dir           = var.provisioning_source_dir

@@ -103,7 +103,21 @@ derp:
     - https://controlplane.tailscale.com/derpmap/default
   auto_update_enabled: true
   update_frequency: 3h
+
+policy:
+  mode: file
+  path: /etc/headscale/policy.hujson
 EOF
+
+# Deny all node-to-node traffic. With no policy headscale allows everything, so every quark
+# could reach every other quark's proxy. An empty "acls" list is headscale's documented
+# deny-all (docs/ref/acls.md) -- not the same as omitting "acls", which means allow-all.
+# Loosen this only once there is a design for how an owner's clients join the tailnet.
+cat > /etc/headscale/policy.hujson <<'POLICY'
+{
+  "acls": []
+}
+POLICY
 
 systemctl enable headscale
 systemctl restart headscale
@@ -127,6 +141,15 @@ server {
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
     }
+    # The provisioning service binds loopback only, so this is its sole way in, and it
+    # shares the certbot certificate with headscale.
+    location /provision {
+        proxy_pass http://127.0.0.1:8081;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
 }
 EOF
 ln -sf /etc/nginx/sites-available/headscale /etc/nginx/sites-enabled/headscale
@@ -149,7 +172,7 @@ certbot --nginx -d "$${DOMAIN}" \
 
 # -- 6. Provisioning service -----------------------------------------------
 rm -rf ${source_dir}
-git clone --depth 1 --branch ${repo_branch} ${repo_url} ${source_dir}
+git clone --depth 1 --branch ${repo_ref} ${repo_url} ${source_dir}
 
 cd ${source_dir}
 GOPATH=/root/go GOMODCACHE=/root/go/pkg/mod GOCACHE=/root/go/cache \
@@ -171,8 +194,9 @@ Requires=headscale.service
 [Service]
 Type=simple
 User=headscale
-Environment=PORT=8081
+Environment=PROVISIONING_LISTEN_ADDR=127.0.0.1:8081
 Environment=HEADSCALE_URL=http://127.0.0.1:8080
+Environment=HEADSCALE_USER=quark
 EnvironmentFile=-${config_dir}/provisioning.env
 ExecStart=/usr/local/bin/${service_name}
 Restart=on-failure
@@ -195,5 +219,8 @@ log "Setup complete. Public IP: $(curl -s ifconfig.me)"
 log ""
 log "Post-deploy steps:"
 log "  1. Create API key: sudo headscale apikeys create --expiration 9999d"
-log "  2. Store key: echo 'HEADSCALE_API_KEY=<key>' | sudo tee ${config_dir}/provisioning.env"
-log "  3. Start provisioning: sudo systemctl start ${service_name}"
+log "  2. Write BOTH to ${config_dir}/provisioning.env -- the service exits if either is missing:"
+log "       HEADSCALE_API_KEY=<key from step 1>"
+log "       PROVISIONING_SECRET=<a long random string>"
+log "  3. Create the user keys are minted for: sudo headscale users create quark"
+log "  4. Start provisioning: sudo systemctl start ${service_name}"

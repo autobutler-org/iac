@@ -33,6 +33,11 @@ resource "azurerm_public_ip" "this" {
 # grants nothing -- headscale's grpc_listen_addr is 127.0.0.1:50443, so no process is
 # listening on a public interface for that rule to admit. It is dropped here rather than
 # replicated, and the gap is left so the remaining numbers still line up.
+#
+# 140 is vacant for the same kind of reason: it held AllowProvisioning (tcp/8081), which
+# put the provisioning secret on the internet in cleartext. The service now binds
+# 127.0.0.1:8081 and is reached through nginx at https://<headscale_domain>/provision,
+# on the certificate 443 already serves.
 resource "azurerm_network_security_group" "this" {
   name                = "${local.name}-nsg"
   resource_group_name = var.resource_group_name
@@ -73,18 +78,6 @@ resource "azurerm_network_security_group" "this" {
     protocol                   = "Tcp"
     source_port_range          = "*"
     destination_port_range     = "80"
-    source_address_prefix      = "*"
-    destination_address_prefix = "*"
-  }
-
-  security_rule {
-    name                       = "AllowProvisioning"
-    priority                   = 140
-    direction                  = "Inbound"
-    access                     = "Allow"
-    protocol                   = "Tcp"
-    source_port_range          = "*"
-    destination_port_range     = "8081"
     source_address_prefix      = "*"
     destination_address_prefix = "*"
   }

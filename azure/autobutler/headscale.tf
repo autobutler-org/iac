@@ -9,8 +9,8 @@
 # --login-server. Test the infrastructure before the quark PR exists, or a failure could
 # be in either repo with no way to tell which.
 #
-# The resource group already existed (created by hand alongside the autobutler one) and is
-# adopted in imports.tf rather than created here -- see the comment there.
+# The resource group already existed (created by hand alongside the autobutler one) and was
+# adopted with an import block rather than created here.
 #
 # There is a second, hand-built headscale host in autobutler-headscale serving a live
 # tailnet. It is deliberately NOT managed by this module yet: adopting a running control

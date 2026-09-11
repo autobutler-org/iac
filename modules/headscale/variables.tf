@@ -89,9 +89,9 @@ variable "headscale_version" {
 }
 
 variable "go_version" {
-  description = "Go toolchain version installed on the VM to build the provisioning binary from source."
+  description = "Go toolchain version installed on the VM to build the provisioning binary from source. Keep it at or above the go directive in go.mod at provisioning_repo_ref."
   type        = string
-  default     = "1.22.3"
+  default     = "1.26.6"
 }
 
 variable "provisioning_repo_url" {
@@ -100,10 +100,10 @@ variable "provisioning_repo_url" {
   default     = "https://github.com/autobutler-org/quark.git"
 }
 
-variable "provisioning_repo_branch" {
-  description = "Branch of provisioning_repo_url to clone. The clone is --depth 1, so this pins what gets built only as far as the branch tip at boot."
+variable "provisioning_repo_ref" {
+  description = "Tag (or branch) of provisioning_repo_url to build, passed to git clone --branch. Use a release tag so a re-run of the setup script rebuilds the same code; a branch builds whatever its tip is at that moment."
   type        = string
-  default     = "main"
+  default     = "v0.37.0"
 }
 
 variable "provisioning_package" {
