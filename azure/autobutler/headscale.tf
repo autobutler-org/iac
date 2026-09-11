@@ -36,6 +36,12 @@ module "quark_headscale" {
   admin_ssh_public_key  = var.quark_headscale_ssh_public_key
   provisioning_secret   = var.quark_headscale_provisioning_secret
 
+  # The provisioning service that shells out to the headscale CLI (no API key) lives in
+  # quark#1877, which is not in a release yet; v0.37.0 restart-loops on the missing
+  # HEADSCALE_API_KEY. A branch rebuilds whatever its tip is on every re-run of the setup
+  # script, so move this to the first release tag that contains #1877.
+  provisioning_repo_ref = "feat/1876-auto-provision-remote-access"
+
   # With the zone passed in, the module owns its own A record as an alias to the public IP
   # resource. That removes the apply -> read the IP -> create the record -> apply again
   # loop the manual approach needs, and the record follows the IP if it is ever replaced.
