@@ -42,10 +42,28 @@ the internet inside TLS.
 
 ## ACL policy
 
-headscale loads `/etc/headscale/policy.hujson`, which the setup script writes as
-`{"acls": []}` — deny all. No node can reach any other node, including nodes owned by the
-same person. That is deliberate until there is a design for how an owner's clients join
-the tailnet. Note that omitting `acls` entirely means the opposite, allow-all.
+headscale loads `/etc/headscale/policy.hujson`, which the setup script writes as an
+explicit allow-all:
+
+```json
+{
+  "acls": [
+    { "action": "accept", "src": ["*"], "dst": ["*:*"] },
+    { "action": "accept", "src": ["*"], "dst": ["*:*"], "proto": "icmp" }
+  ]
+}
+```
+
+Two rules, because in 0.28 a rule with no `proto` covers only TCP and UDP, and
+`"proto": "*"` is rejected. The second rule keeps `ping` working between nodes.
+
+Every node may reach every node. The tailnet is open by design: access control is quark's
+own HTTP login, not the network. Tightening the policy is future work, tied to how an
+owner's phone pairs with their quark.
+
+The rule is spelled out rather than left implicit. In headscale 0.28 omitting `acls` also
+means allow-all, but an empty `acls` list means deny-all, and a file that relies on a
+missing key hides which of the two was meant.
 
 ## What quark has to change
 

@@ -109,13 +109,18 @@ policy:
   path: /etc/headscale/policy.hujson
 EOF
 
-# Deny all node-to-node traffic. With no policy headscale allows everything, so every quark
-# could reach every other quark's proxy. An empty "acls" list is headscale's documented
-# deny-all (docs/ref/acls.md) -- not the same as omitting "acls", which means allow-all.
-# Loosen this only once there is a design for how an owner's clients join the tailnet.
+# Allow all node-to-node traffic, spelled out so the intent is visible here. Access control
+# is quark's own HTTP login, not the tailnet; the tailnet is open by design. Tightening it is
+# future work, tied to how an owner's phone pairs with their quark. Beware: an empty "acls"
+# list is headscale's deny-all (docs/ref/acls.md), and omitting "acls" is an implicit allow-all.
+# A rule with no "proto" covers only TCP and UDP in 0.28, and "proto": "*" is rejected, so ICMP
+# (ping) needs a rule of its own.
 cat > /etc/headscale/policy.hujson <<'POLICY'
 {
-  "acls": []
+  "acls": [
+    { "action": "accept", "src": ["*"], "dst": ["*:*"] },
+    { "action": "accept", "src": ["*"], "dst": ["*:*"], "proto": "icmp" }
+  ]
 }
 POLICY
 
