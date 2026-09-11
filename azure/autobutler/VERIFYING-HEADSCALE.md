@@ -18,8 +18,8 @@ No VM access needed, and the most common place for this to be "broken" when noth
 ```bash
 terraform -chdir=azure/autobutler output tailnet_dns_zone_nameservers
 dig +short NS ts.autobutler.org
-dig +short A network.quark.ts.autobutler.org
-curl -sI https://network.quark.ts.autobutler.org | head -1
+dig +short A quark.ts.autobutler.org
+curl -sI https://quark.ts.autobutler.org | head -1
 ```
 
 The `NS` lookup must return the Azure nameservers from that output. If it returns nothing, the one-time
@@ -34,8 +34,8 @@ host rather than debugging headscale.
 ## Layer 1 -- headscale is serving
 
 ```bash
-curl -s https://network.quark.ts.autobutler.org/key\?v=106
-curl -s https://network.quark.ts.autobutler.org/health
+curl -s https://quark.ts.autobutler.org/key\?v=106
+curl -s https://quark.ts.autobutler.org/health
 ```
 
 `/key` returns the server's noise public key. Getting one back proves TLS, nginx, and the proxy to
@@ -44,7 +44,7 @@ curl -s https://network.quark.ts.autobutler.org/health
 ## Layer 2 -- the service on the box
 
 ```bash
-ssh quark@network.quark.ts.autobutler.org
+ssh quark@quark.ts.autobutler.org
 sudo systemctl status headscale
 sudo journalctl -u headscale -n 50 --no-pager
 ```
@@ -74,7 +74,7 @@ it exits.
 
 ```bash
 docker run -it --rm --cap-add=NET_ADMIN --device /dev/net/tun tailscale/tailscale \
-  tailscale up --login-server=https://network.quark.ts.autobutler.org --authkey=<key>
+  tailscale up --login-server=https://quark.ts.autobutler.org --authkey=<key>
 ```
 
 Back on the server:
@@ -98,7 +98,7 @@ Run this on the VM, so the secret goes from the env file to curl without being p
 ```bash
 sudo systemctl status quark-provisioning
 SECRET="$(sudo sed -n 's/^PROVISIONING_SECRET=//p' /etc/quark/provisioning.env)"
-curl -s -X POST https://network.quark.ts.autobutler.org/provision \
+curl -s -X POST https://quark.ts.autobutler.org/provision \
   -H "X-Provisioning-Secret: $SECRET" \
   -H "Content-Type: application/json" \
   -d '{"device_id": "verify-layer-4"}'

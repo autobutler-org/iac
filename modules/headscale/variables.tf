@@ -15,7 +15,7 @@ variable "location" {
 }
 
 variable "headscale_domain" {
-  description = "Public FQDN clients reach headscale on, e.g. network.quark.autobutler.org. Becomes server_url in the headscale config, the nginx server_name, and the certbot certificate name. An A record for it must point at the module's public IP output before TLS can be issued."
+  description = "Public FQDN clients reach headscale on, e.g. quark.autobutler.org. Becomes server_url in the headscale config, the nginx server_name, and the certbot certificate name. An A record for it must point at the module's public IP output before TLS can be issued."
   type        = string
 }
 

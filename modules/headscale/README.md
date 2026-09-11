@@ -9,12 +9,12 @@ here to make quark talk to a server this module built, everything you need is be
 
 ## What the module produces
 
-| | quark instance |
-| --- | --- |
-| Control server (`server_url`) | `https://network.quark.ts.autobutler.org` |
-| MagicDNS base (`base_domain`) | `headscale.quark.ts.autobutler.org` |
-| Provisioning API | `https://network.quark.ts.autobutler.org/provision` |
-| Azure fallback FQDN | `quark-headscale.eastus.cloudapp.azure.com` |
+|                               | quark instance                              |
+| ----------------------------- | ------------------------------------------- |
+| Control server (`server_url`) | `https://quark.ts.autobutler.org`           |
+| MagicDNS base (`base_domain`) | `headscale.quark.ts.autobutler.org`         |
+| Provisioning API              | `https://quark.ts.autobutler.org/provision` |
+| Azure fallback FQDN           | `quark-headscale.eastus.cloudapp.azure.com` |
 
 The control server and the MagicDNS base are deliberately **siblings** — neither contains
 the other. A node named the same as the control server would otherwise shadow it in
@@ -26,12 +26,12 @@ be given one.
 
 ## Ports
 
-| Port | Proto | Purpose |
-| --- | --- | --- |
-| 22 | TCP | SSH (also Entra ID login, via the `AADSSHLoginForLinux` extension) |
-| 80 | TCP | ACME HTTP-01 challenge, redirects to 443 once a certificate exists |
-| 443 | TCP | headscale, behind nginx |
-| 3478 | UDP | STUN, for NAT traversal |
+| Port | Proto | Purpose                                                            |
+| ---- | ----- | ------------------------------------------------------------------ |
+| 22   | TCP   | SSH (also Entra ID login, via the `AADSSHLoginForLinux` extension) |
+| 80   | TCP   | ACME HTTP-01 challenge, redirects to 443 once a certificate exists |
+| 443  | TCP   | headscale, behind nginx                                            |
+| 3478 | UDP   | STUN, for NAT traversal                                            |
 
 headscale's gRPC (50443) is **not** exposed. It listens on `127.0.0.1:50443`, so a public
 rule would grant nothing; reach it over SSH if you need remote CLI admin.
@@ -70,14 +70,14 @@ missing key hides which of the two was meant.
 `pkg/util/remoteutil/remoteutil.go` currently hardcodes a domain that is not ours:
 
 ```go
-const defaultControlURL = "https://network.quark.org"   // quark.org is not our domain
+const defaultControlURL = "https://quark.org"   // quark.org is not our domain
 ```
 
 `quark.org` resolves to `52.20.84.62`, which belongs to someone else — rename fallout of
 the same kind `updateutil.go` already documents. It needs to become:
 
 ```go
-const defaultControlURL = "https://network.quark.ts.autobutler.org"
+const defaultControlURL = "https://quark.ts.autobutler.org"
 ```
 
 `QUARK_HEADSCALE_URL` already overrides this at runtime, so a build can be pointed at a
@@ -89,12 +89,12 @@ Nothing by hand. The unit sets the plain configuration, and the setup script wri
 secret into `${config_dir}/provisioning.env` (`/etc/quark/provisioning.env`), mode `600`,
 owner `headscale`.
 
-| Variable | Set by | Required |
-| --- | --- | --- |
-| `PROVISIONING_LISTEN_ADDR` | the unit (`127.0.0.1:8081`) | no, defaults to `:8081` |
-| `HEADSCALE_USER` | the unit (`quark`) | no, defaults to `quark` |
-| `PROVISIONING_SECRET` | the setup script, from `var.provisioning_secret` | yes — `log.Fatal` without it |
-| `PROVISIONING_KEY_EXPIRY_HOURS` | not set | no |
+| Variable                        | Set by                                           | Required                     |
+| ------------------------------- | ------------------------------------------------ | ---------------------------- |
+| `PROVISIONING_LISTEN_ADDR`      | the unit (`127.0.0.1:8081`)                      | no, defaults to `:8081`      |
+| `HEADSCALE_USER`                | the unit (`quark`)                               | no, defaults to `quark`      |
+| `PROVISIONING_SECRET`           | the setup script, from `var.provisioning_secret` | yes — `log.Fatal` without it |
+| `PROVISIONING_KEY_EXPIRY_HOURS` | not set                                          | no                           |
 
 There is no headscale API key. The service mints pre-auth keys by running the local
 `headscale` CLI (autobutler-org/quark#1877), which reaches headscale over its unix socket:
@@ -194,7 +194,7 @@ journalctl -u headscale-certbot
 Clients call the provisioning service, which mints a headscale pre-auth key on their behalf:
 
 ```http
-POST https://network.quark.ts.autobutler.org/provision
+POST https://quark.ts.autobutler.org/provision
 X-Provisioning-Secret: <PROVISIONING_SECRET>
 Content-Type: application/json
 

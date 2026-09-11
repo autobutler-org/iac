@@ -13,7 +13,7 @@ variable "tags" {
 variable "quark_headscale_domain" {
   description = "Public FQDN the quark tailnet's headscale control server is reached on. An A record for it must point at the module's public IP before TLS can be issued."
   type        = string
-  default     = "network.quark.ts.autobutler.org"
+  default     = "quark.ts.autobutler.org"
 }
 
 variable "quark_headscale_base_domain" {

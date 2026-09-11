@@ -15,8 +15,8 @@
 resource "azurerm_dns_a_record" "this" {
   count = var.dns_zone_name == null ? 0 : 1
 
-  # Zone-relative name. "network.quark" in zone "ts.autobutler.org" is
-  # network.quark.ts.autobutler.org. The precondition below is what stops a mismatched
+  # Zone-relative name. "quark" in zone "ts.autobutler.org" is
+  # quark.ts.autobutler.org. The precondition below is what stops a mismatched
   # domain and zone from silently producing a record in the wrong place.
   name                = trimsuffix(var.headscale_domain, ".${var.dns_zone_name}")
   zone_name           = var.dns_zone_name
