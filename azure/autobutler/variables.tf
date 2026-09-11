@@ -34,6 +34,12 @@ variable "quark_headscale_ssh_public_key" {
   default     = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBFF2mZiRit7xR865+/Relyro1JBD1TzGT48XeC4XGSg autobutler.org@gmail.com"
 }
 
+variable "quark_headscale_provisioning_secret" {
+  description = "Shared secret for the quark tailnet's provisioning service. No default: CI sets it as TF_VAR_quark_headscale_provisioning_secret from the QUARK_PROVISIONING_SECRET organization secret, which quark's release build stamps into the client too. A local plan needs it exported the same way."
+  type        = string
+  sensitive   = true
+}
+
 variable "tailnet_dns_zone" {
   description = "Public DNS zone delegated to Azure for tailnet records. Its parent stays at Porkbun; only this label is delegated."
   type        = string

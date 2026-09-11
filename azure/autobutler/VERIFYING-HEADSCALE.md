@@ -27,8 +27,9 @@ delegation at Porkbun has not been done and nothing below can work -- see `boots
 
 **A TLS failure here on first boot is expected, not a bug.** certbot runs during VM provisioning, which happens
 before the DNS record can possibly have propagated. The setup script treats that as a warning by design, so the
-host serves plain HTTP and keeps going. Re-run certbot per `modules/headscale/README.md` rather than debugging
-headscale.
+host serves plain HTTP and keeps going, and `headscale-certbot.timer` retries every 20 minutes until a
+certificate exists. If it stays plain HTTP well after DNS resolves, read `journalctl -u headscale-certbot` on the
+host rather than debugging headscale.
 
 ## Layer 1 -- headscale is serving
 
@@ -57,15 +58,16 @@ sudo cat /var/log/azure/custom-script/handler.log
 
 ## Layer 3 -- a real node joins
 
-This is the actual proof. Create a user and a short-lived key on the server:
+This is the actual proof. The setup script has already created the `quark` user, so mint a short-lived key for it on
+the server:
 
 ```bash
-sudo headscale users create quark
-sudo headscale preauthkeys create --user quark --expiration 1h
+sudo headscale users list                     # note the ID of quark
+sudo headscale preauthkeys create --user <id> --expiration 1h
 ```
 
-> The `--user` flag has changed across headscale releases -- it has taken a name and an ID at different points.
-> Check `headscale preauthkeys create --help` on the host rather than trusting this line.
+> In v0.28.0 `--user` takes the numeric user ID, not the name. It has taken a name at other points, so check
+> `headscale preauthkeys create --help` on the host after a version bump.
 
 Then join from anywhere. A container is cleanest: nothing is installed on your machine, and the node is gone when
 it exits.
@@ -86,17 +88,30 @@ working**, with zero quark code involved.
 
 ## Layer 4 -- the provisioning service
 
-This is quark's binary, not headscale, and it is a separate question. It will not start at all until both
-secrets exist -- `cmd/provisioning/main.go` calls `log.Fatal` on each:
+This is quark's binary, not headscale, and it is a separate question. Nothing about it is set up by hand. Its one
+secret, `PROVISIONING_SECRET`, comes from the `QUARK_PROVISIONING_SECRET` org secret through
+`TF_VAR_quark_headscale_provisioning_secret`, and the setup script writes it into `/etc/quark/provisioning.env` and
+starts the service. There is no headscale API key: the service mints keys through the local `headscale` CLI.
+
+Run this on the VM, so the secret goes from the env file to curl without being printed or copied anywhere:
 
 ```bash
 sudo systemctl status quark-provisioning
-curl -s -X POST http://network.quark.ts.autobutler.org:8081/provision \
-  -H "X-Provisioning-Secret: <secret>" -d '{}'
+SECRET="$(sudo sed -n 's/^PROVISIONING_SECRET=//p' /etc/quark/provisioning.env)"
+curl -s -X POST https://network.quark.ts.autobutler.org/provision \
+  -H "X-Provisioning-Secret: $SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"device_id": "verify-layer-4"}'
+unset SECRET
 ```
 
+A binary built from `provisioning_repo_ref` `v0.37.0` still wants `HEADSCALE_API_KEY`, and it restart-loops on
+`log.Fatal`. That is expected until the ref is bumped to a quark release with autobutler-org/quark#1877.
+
+A `200` carries an `auth_key`. The service allows five calls per hour, so do not loop this.
+
 If layer 3 passes and layer 4 fails, the tailnet is fine and the problem is quark's service. See
-`modules/headscale/README.md` for the two variables it needs.
+`modules/headscale/README.md` for what it needs and where each value comes from.
 
 ## Known: UDP 3478 answers nothing
 
