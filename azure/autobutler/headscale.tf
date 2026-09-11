@@ -1,8 +1,8 @@
 # Headscale control server for the quark tailnet.
 #
 # modules/headscale/README.md is the contract with the quark codebase: the endpoints it
-# exposes, the constant in remoteutil.go that has to point at them, and the two secrets
-# the provisioning service needs post-boot. Read it before changing a domain here.
+# exposes, the constant in remoteutil.go that has to point at them, and where the
+# provisioning service's shared secret comes from. Read it before changing a domain here.
 #
 # VERIFYING-HEADSCALE.md, next to this file, is how to prove the server works after an
 # apply -- without any quark change, because the stock Tailscale client takes
@@ -34,6 +34,7 @@ module "quark_headscale" {
   admin_email           = var.quark_headscale_admin_email
   admin_username        = "quark"
   admin_ssh_public_key  = var.quark_headscale_ssh_public_key
+  provisioning_secret   = var.quark_headscale_provisioning_secret
 
   # With the zone passed in, the module owns its own A record as an alias to the public IP
   # resource. That removes the apply -> read the IP -> create the record -> apply again

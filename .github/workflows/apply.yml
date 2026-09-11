@@ -70,6 +70,17 @@ jobs:
           name: planfile-${{ github.sha }}
           path: azure/autobutler
 
+      # plan.yml uploads the planfile encrypted, because it holds the provisioning secret in
+      # plain text and this repo's artifacts are public. See the header of plan.yml.
+      - name: Decrypt planfile
+        env:
+          TF_PLANFILE_PASSPHRASE: ${{ secrets.TF_PLANFILE_PASSPHRASE }}
+        run: |
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 \
+            -pass env:TF_PLANFILE_PASSPHRASE \
+            -in azure/autobutler/planfile.tfplan.enc \
+            -out azure/autobutler/planfile.tfplan
+
       # init runs again rather than carrying .terraform/ across jobs. A planfile is bound to
       # the configuration and the state it was made against, so the apply job has to init
       # against that same state anyway -- and the committed four-platform lock file makes
@@ -78,6 +89,10 @@ jobs:
         run: |
           make init
 
+      # No TF_VAR_quark_headscale_provisioning_secret here, deliberately. A saved planfile
+      # carries its own variable values and terraform ignores TF_VAR_* when applying one, so
+      # the secret reaches this job only inside the planfile. It is set where the plan is
+      # made, in plan.yml, which this workflow calls with `secrets: inherit`.
       - name: Apply
         run: |
           make apply-from-planfile

@@ -162,18 +162,52 @@ nginx -t
 systemctl reload nginx
 log "Nginx configured (HTTP only, TLS pending DNS)."
 
-# -- 5. TLS -- deliberately non-fatal --------------------------------------
-# certbot cannot succeed until an A record for $${DOMAIN} resolves to this VM's public IP,
-# and that record is created by hand after the IP exists. A first boot therefore fails here
+# -- 5. TLS -- deliberately non-fatal, retried by a timer ---------------------
+# certbot cannot succeed until $${DOMAIN} resolves to this VM's public IP, and on a new zone
+# that waits on the one-time NS delegation at Porkbun. A first boot can therefore fail here
 # under normal conditions, so this must not abort the script: everything below it -- the
 # provisioning binary and its unit -- has nothing to do with TLS and should still land.
-# Re-run the printed command once DNS is live, or just re-apply to re-run this whole script.
+#
+# headscale-certbot.timer retries every 20 minutes until a certificate exists, after which
+# its ConditionPathExists skips the service. Three tries an hour, plus the direct run below,
+# stays under Let's Encrypt's five failed validations per hostname per hour. Renewal is
+# certbot's own certbot.timer, shipped by the package, not this one.
+#
+# The direct run below stays, rather than just starting the service, because it is also what
+# puts TLS back after a re-run: step 4 rewrites the nginx site as plain HTTP, and certbot
+# reinstalls the existing certificate into it. The timer's condition would skip that.
+CERTBOT_CMD="certbot --nginx -d $${DOMAIN} --non-interactive --agree-tos -m $${ADMIN_EMAIL} --redirect"
+
+cat > /etc/systemd/system/headscale-certbot.service <<EOF
+[Unit]
+Description=Obtain the TLS certificate for $${DOMAIN} once its DNS resolves
+ConditionPathExists=!/etc/letsencrypt/live/$${DOMAIN}/fullchain.pem
+After=network-online.target nginx.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/$${CERTBOT_CMD}
+EOF
+
+cat > /etc/systemd/system/headscale-certbot.timer <<'EOF'
+[Unit]
+Description=Retry the headscale TLS certificate until one exists
+
+[Timer]
+OnCalendar=*:0/20
+
+[Install]
+WantedBy=timers.target
+EOF
+
+systemctl daemon-reload
+systemctl enable --now headscale-certbot.timer
+
 log "Attempting TLS certificate (non-fatal if DNS not propagated yet)..."
-certbot --nginx -d "$${DOMAIN}" \
-  --non-interactive --agree-tos -m "$${ADMIN_EMAIL}" \
-  --redirect \
+$${CERTBOT_CMD} \
   && log "TLS certificate issued." \
-  || log "WARNING: certbot failed. Once DNS points to this IP, run: sudo certbot --nginx -d $${DOMAIN} --non-interactive --agree-tos -m $${ADMIN_EMAIL} --redirect"
+  || log "WARNING: certbot failed, most likely because DNS does not point here yet. headscale-certbot.timer retries every 20 minutes; see: journalctl -u headscale-certbot"
 
 # -- 6. Provisioning service -----------------------------------------------
 rm -rf ${source_dir}
@@ -185,11 +219,13 @@ GOPATH=/root/go GOMODCACHE=/root/go/pkg/mod GOCACHE=/root/go/cache \
 log "Provisioning binary installed at /usr/local/bin/${service_name}"
 
 # -- 7. Provisioning service systemd unit ----------------------------------
-# HEADSCALE_API_KEY is deliberately absent and stays a manual post-boot step. The key
-# cannot exist before headscale has run at least once -- it is minted by
-# `headscale apikeys create` against a running server -- so nothing here could supply it.
-# EnvironmentFile takes a leading `-`, so the unit loads cleanly while the file is empty;
-# the service simply cannot talk to headscale until the key is written.
+# The service mints pre-auth keys by running the headscale CLI, which talks to headscale
+# over its unix socket and needs no API key. headscale's defaults put that socket at
+# /var/run/headscale/headscale.sock with mode 0770, inside headscale.service's
+# RuntimeDirectory (/run/headscale, 0750, owned by headscale). Running as User=headscale is
+# what grants access to it. The config above sets no cli.address, and nothing here may set
+# HEADSCALE_CLI_ADDRESS: either one sends the CLI to remote gRPC, which demands an API key.
+# The binary is /usr/bin/headscale, on the default systemd PATH.
 cat > /etc/systemd/system/${service_name}.service <<'UNIT'
 [Unit]
 Description=Quark Provisioning Service
@@ -200,9 +236,8 @@ Requires=headscale.service
 Type=simple
 User=headscale
 Environment=PROVISIONING_LISTEN_ADDR=127.0.0.1:8081
-Environment=HEADSCALE_URL=http://127.0.0.1:8080
 Environment=HEADSCALE_USER=quark
-EnvironmentFile=-${config_dir}/provisioning.env
+EnvironmentFile=${config_dir}/provisioning.env
 ExecStart=/usr/local/bin/${service_name}
 Restart=on-failure
 RestartSec=5
@@ -211,21 +246,43 @@ RestartSec=5
 WantedBy=multi-user.target
 UNIT
 
+# -- 8. Provisioning secret -------------------------------------------------
+# From var.provisioning_secret, via protected_settings. The file is owned by this script
+# and rewritten whole on every run, which is also how a rotated secret lands; a hand edit
+# is lost on the next apply.
+#
+# Tracing is off for this block: under `set -x` bash would echo the decoded value to stderr,
+# and the extension reports stderr's tail to ARM. printf is a builtin and base64 reads a
+# here-string, so the value never appears in a process's argv either. mktemp creates the
+# file 0600 and mv swaps it in atomically, so the service never reads a half-written file.
+set +x
 mkdir -p ${config_dir}
-touch ${config_dir}/provisioning.env
-chown headscale:headscale ${config_dir}/provisioning.env
-chmod 600 ${config_dir}/provisioning.env
+ENV_TMP="$(mktemp ${config_dir}/.provisioning.env.XXXXXX)"
+SECRET="$(base64 -d <<<'${secret_b64}')"
+printf 'PROVISIONING_SECRET=%s\n' "$${SECRET}" > "$${ENV_TMP}"
+unset SECRET
+chown headscale:headscale "$${ENV_TMP}"
+mv -f "$${ENV_TMP}" ${config_dir}/provisioning.env
+set -x
+log "Wrote PROVISIONING_SECRET to ${config_dir}/provisioning.env."
 
+# -- 9. Tailnet user --------------------------------------------------------
+# The user pre-auth keys are minted for. Must match HEADSCALE_USER in the unit above. The
+# socket appears a moment after headscale starts, hence the retry on the first call.
+retry headscale users list >/dev/null
+if headscale users list -o json | jq -e '.[]? | select(.name == "quark")' >/dev/null; then
+  log "headscale user quark already exists."
+else
+  headscale users create quark
+fi
+
+# -- 10. Start ---------------------------------------------------------------
+# restart rather than start, so a re-run picks up a rebuilt binary and a rotated secret.
 systemctl daemon-reload
 systemctl enable ${service_name}
-# Deliberately not started -- see the API key note above.
+systemctl restart ${service_name}
 
 log "Setup complete. Public IP: $(curl -s ifconfig.me)"
-log ""
-log "Post-deploy steps:"
-log "  1. Create API key: sudo headscale apikeys create --expiration 9999d"
-log "  2. Write BOTH to ${config_dir}/provisioning.env -- the service exits if either is missing:"
-log "       HEADSCALE_API_KEY=<key from step 1>"
-log "       PROVISIONING_SECRET=<a long random string>"
-log "  3. Create the user keys are minted for: sudo headscale users create quark"
-log "  4. Start provisioning: sudo systemctl start ${service_name}"
+log "Nothing left to do on this host. If TLS is still pending, headscale-certbot.timer"
+log "retries every 20 minutes -- on a new DNS zone that waits on the one-time NS delegation"
+log "at Porkbun. Check: systemctl list-timers headscale-certbot.timer"

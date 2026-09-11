@@ -31,6 +31,16 @@ locals {
 
   # Rendered here rather than inline in the extension so the settings block stays readable,
   # and so a `terraform console` can print the script that would actually be sent.
+  #
+  # The script carries var.provisioning_secret, so the rendered string is sensitive and the
+  # console prints "(sensitive value)" for it. Wrap it in nonsensitive() to read it, and
+  # only ever with a dummy secret exported.
+  #
+  # The secret is rendered into the script rather than passed to it: CustomScript takes
+  # `script` or `commandToExecute`, never both, so an environment variable would mean
+  # inlining this whole script into commandToExecute, where it is also visible in `ps` on
+  # the VM for as long as it runs. It is base64-encoded so no value can break the shell
+  # quoting around it.
   setup_script = templatefile("${path.module}/templates/setup-headscale.bash.tftpl", {
     domain               = var.headscale_domain
     base_domain          = var.headscale_base_domain
@@ -44,5 +54,6 @@ locals {
     service_name         = var.provisioning_service_name
     source_dir           = var.provisioning_source_dir
     config_dir           = var.provisioning_config_dir
+    secret_b64           = base64encode(var.provisioning_secret)
   })
 }

@@ -127,6 +127,21 @@ Authentication is OIDC via `azure/login`. There is no client secret anywhere:
 *variables*, none of which is sensitive. `bootstrap/github-oidc.bash` creates the app
 registration and federated credentials this depends on.
 
+Two values are real secrets, and both are GitHub Actions secrets:
+
+- `QUARK_PROVISIONING_SECRET` is an organization secret shared with this repo and quark.
+  `plan.yml` passes it as `TF_VAR_quark_headscale_provisioning_secret` on the Plan step
+  only. `apply.yml` does not set it, because a saved planfile carries its own variable
+  values. See `modules/headscale/README.md`, "The shared secret".
+- `TF_PLANFILE_PASSPHRASE` is a repository secret. A planfile holds every variable and a
+  copy of state in plain text, and this repo's artifacts are public, so `plan.yml` uploads
+  it encrypted with `openssl enc` and fails rather than upload it in the clear.
+  `apply.yml` decrypts it.
+
+Never add a step that prints, uploads or caches `planfile.tfplan` unencrypted. A local
+`make plan` needs `TF_VAR_quark_headscale_provisioning_secret` exported. Any valid value
+will plan, and a local plan is never applied.
+
 `concurrency` differs between the two on purpose: a superseded plan is cancelled, an apply
 never is. A half-applied change is worse than a queued one.
 

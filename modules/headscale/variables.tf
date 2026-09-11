@@ -125,9 +125,23 @@ variable "provisioning_source_dir" {
 }
 
 variable "provisioning_config_dir" {
-  description = "Directory on the VM holding provisioning.env, where the headscale API key is written by hand after first boot."
+  description = "Directory on the VM holding provisioning.env, which the setup script writes PROVISIONING_SECRET into on every run."
   type        = string
   default     = "/etc/quark"
+}
+
+variable "provisioning_secret" {
+  description = "Shared secret the provisioning service requires in the X-Provisioning-Secret header. quark release builds stamp the same value into the client, so the two must match. Lands in Terraform state and in any saved planfile; see the module README."
+  type        = string
+  sensitive   = true
+
+  # The value ends up unquoted in a systemd EnvironmentFile, where quotes, backslashes and
+  # whitespace are parsed rather than kept. Allowing only the base64, base64url and hex
+  # alphabets means the service reads exactly the bytes quark was stamped with.
+  validation {
+    condition     = length(var.provisioning_secret) >= 32 && can(regex("^[A-Za-z0-9+/=_.~-]+$", var.provisioning_secret))
+    error_message = "provisioning_secret must be at least 32 characters of A-Z, a-z, 0-9 and + / = _ . ~ - only (for example `openssl rand -base64 48`). In CI it comes from TF_VAR_quark_headscale_provisioning_secret, set from the QUARK_PROVISIONING_SECRET org secret; an empty value means the secret was not available to the run."
+  }
 }
 
 variable "tags" {

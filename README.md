@@ -98,6 +98,15 @@ Authentication is OIDC; there is no client secret. `bootstrap/github-oidc.bash` 
 app registration and federated credentials, and prints the three repository variables to
 set.
 
+Two Actions secrets exist all the same, and neither is an Azure credential. The
+`QUARK_PROVISIONING_SECRET` organization secret becomes the headscale provisioning service's
+shared secret, as described in `modules/headscale/README.md`. `TF_PLANFILE_PASSPHRASE`
+encrypts the planfile artifact. The encryption exists because a planfile stores input
+variables and a copy of state in plain text, whether or not they are marked sensitive, and
+artifacts on a public repository can be downloaded by any signed-in GitHub user. A run that
+gets no secrets, such as a fork or Dependabot pull request, cannot plan. `check.yml` needs
+neither secret and still runs for those pull requests.
+
 `codeql.yml` is a deliberately narrow fourth workflow. CodeQL supports neither Terraform nor
 Bicep — the analysers do not exist — so the only thing in this repository it can read is the
 workflow files themselves, scanned as the `actions` language. That is worth having: a
