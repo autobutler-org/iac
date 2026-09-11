@@ -9,24 +9,6 @@
 # AZURE_SUBSCRIPTION_ID are repository *variables*, not secrets: none of the three is
 # sensitive, and with OIDC there is no credential to hide. bootstrap/github-oidc.bash
 # creates the app registration and prints the commands that set them.
-#
-# Two values here ARE secrets:
-#
-#   QUARK_PROVISIONING_SECRET  organization secret, shared with this repo and quark. Becomes
-#                              TF_VAR_quark_headscale_provisioning_secret on the Plan step
-#                              only. quark's release build stamps the same value.
-#   TF_PLANFILE_PASSPHRASE     repository secret. Encrypts the planfile artifact.
-#
-# A planfile stores every input variable in plain text, sensitive or not, plus a snapshot
-# of the prior state -- and state holds the rendered setup script with the secret in it.
-# This repo is public, so its artifacts can be downloaded by any signed-in GitHub user.
-# Hence the planfile is uploaded only encrypted, and the job fails rather than upload it
-# without a passphrase.
-#
-# A run that gets no secrets -- a fork PR, or a Dependabot PR, which reads Dependabot
-# secrets rather than Actions secrets -- cannot plan: the provisioning_secret validation
-# fails on the empty value. Fork PRs could not plan before this either, since they get no
-# OIDC token for azure/login. check.yml needs neither secret and still runs for them.
 name: Plan
 on:
   pull_request:
@@ -80,6 +62,11 @@ jobs:
       # `make plan` passes -lock=false deliberately: a plan is read-only and has no business
       # holding the blob lease an apply needs. What serializes CI is the concurrency group
       # above, not the state lock.
+      #
+      # QUARK_PROVISIONING_SECRET is an organization secret shared with this repo and quark.
+      # It is not treated as confidential: it lands in the planfile artifact and in state.
+      # apply.yml needs no TF_VAR, because it applies this saved plan. A run that gets no
+      # secrets (a fork or Dependabot PR) fails the variable's validation and cannot plan.
       - name: Plan
         env:
           TF_VAR_quark_headscale_provisioning_secret: ${{ secrets.QUARK_PROVISIONING_SECRET }}
@@ -164,7 +151,7 @@ jobs:
                   `${BODY_LIMIT.toLocaleString()}-character limit for a comment, so it is not inlined here.`,
                   '',
                   `- **[Job summary and logs for this run](${runUrl})** -- the complete plan is rendered there, no download needed.`,
-                  `- The \`planfile-${context.sha}\` artifact on that page is the encrypted planfile the apply consumes.`,
+                  `- The \`planfile-${context.sha}\` artifact on that page is the binary planfile the apply consumes.`,
                 ].join('\n');
 
             const { data: comments } = await github.rest.issues.listComments({
@@ -180,28 +167,12 @@ jobs:
               await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
             }
 
-      # After the summary and the comment on purpose: a missing passphrase fails the job
-      # here, but a reviewer still gets the plan. See the header for why this step exists.
-      # openssl reads the passphrase from the environment, never from argv.
-      - name: Encrypt planfile
-        env:
-          TF_PLANFILE_PASSPHRASE: ${{ secrets.TF_PLANFILE_PASSPHRASE }}
-        run: |
-          if [ -z "$TF_PLANFILE_PASSPHRASE" ]; then
-            echo "::error::TF_PLANFILE_PASSPHRASE is not available to this run, so the planfile cannot be uploaded (it holds secrets in plain text). Create it with: openssl rand -base64 48 | gh secret set TF_PLANFILE_PASSPHRASE -R $GITHUB_REPOSITORY"
-            exit 1
-          fi
-          openssl enc -aes-256-cbc -pbkdf2 -iter 600000 -salt \
-            -pass env:TF_PLANFILE_PASSPHRASE \
-            -in azure/autobutler/planfile.tfplan \
-            -out azure/autobutler/planfile.tfplan.enc
-
       # Named with the commit SHA so apply.yml can prove it is applying the plan for the
       # commit it is actually running on, rather than whatever plan happened to be latest.
       - name: Upload planfile
         uses: actions/upload-artifact@v7
         with:
           name: planfile-${{ github.sha }}
-          path: azure/autobutler/planfile.tfplan.enc
+          path: azure/autobutler/planfile.tfplan
           retention-days: 5
           if-no-files-found: error

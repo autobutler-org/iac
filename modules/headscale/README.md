@@ -117,6 +117,10 @@ release that includes both changes.
 
 ## The shared secret
 
+> **Not confidential.** This value shows up in plan artifacts and in state, and quark
+> publishes it anyway (autobutler-org/quark#1879). Anything that must stay confidential
+> belongs in a data source, such as Key Vault, not in a `TF_VAR`.
+
 `PROVISIONING_SECRET` authorizes `POST /provision`, so it is the only thing between a
 caller and a valid tailnet enrollment key. quark's release build stamps the same value into
 the client, and both sides read it from one place:
@@ -152,15 +156,11 @@ Until step 3 ships, released clients send the old value and get refused. That re
 the whole setup script, not just the secret step. It rebuilds the binary and restarts
 headscale, which briefly interrupts the control plane without touching the database.
 
-**State access is secret access.** State holds the extension's `protected_settings`, the
-rendered script with the secret in it, so anyone who can read state can read the secret.
-State is the
-`azure/autobutler.tfstate` blob in the `tfstate` container of the `stautobutlertfstate`
-storage account, in the `autobutler` subscription (see `azure/autobutler/backend.tf`).
-That account has no access keys, so reading it takes Entra ID RBAC on the account
-(Storage Blob Data Reader or above). A saved planfile carries the variable itself and a copy
-of state, which is why CI encrypts the planfile artifact. See the header of
-`.github/workflows/plan.yml`.
+**Where the value ends up.** State holds the extension's `protected_settings`, the
+rendered script with the secret in it. State is the `azure/autobutler.tfstate` blob in the
+`tfstate` container of the `stautobutlertfstate` storage account, in the `autobutler`
+subscription (see `azure/autobutler/backend.tf`). Reading it takes Entra ID RBAC on the
+account. The planfile artifact CI uploads carries the variable and a copy of state too.
 
 A local `make plan` needs the variable exported. Any valid value works for a plan. Anything
 other than the real value shows the `cloud-init` extension changing, and a local plan is
