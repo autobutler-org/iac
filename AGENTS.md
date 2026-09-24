@@ -127,15 +127,10 @@ Authentication is OIDC via `azure/login`. There is no client secret anywhere:
 *variables*, none of which is sensitive. `bootstrap/github-oidc.bash` creates the app
 registration and federated credentials this depends on.
 
-`QUARK_PROVISIONING_SECRET` is an organization Actions secret shared with this repo and
-quark. `plan.yml` passes it as `TF_VAR_quark_headscale_provisioning_secret` on the Plan step
-only. `apply.yml` does not set it, because a saved planfile carries its own variable values.
-The value is not treated as confidential, so it shows up in the planfile artifact and in
-state. See `modules/headscale/README.md`, "The shared secret". Anything that must stay
-confidential comes from a data source such as Key Vault, never from a `TF_VAR`.
-
-A local `make plan` needs `TF_VAR_quark_headscale_provisioning_secret` exported. Any valid
-value will plan, and a local plan is never applied.
+No workflow reads an Actions secret. A `TF_VAR` lands in the planfile artifact and in state,
+so anything that must stay confidential comes from a data source such as Key Vault, or is
+generated where it is used (the headscale household key, see `modules/headscale/README.md`),
+never from a `TF_VAR`.
 
 `concurrency` differs between the two on purpose: a superseded plan is cancelled, an apply
 never is. A half-applied change is worse than a queued one.

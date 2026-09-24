@@ -75,21 +75,19 @@ resource "azurerm_linux_virtual_machine" "this" {
 # rendered script updates the extension and re-executes it on the running VM, leaving the
 # OS disk -- and the headscale database on it -- untouched.
 #
-# The script is passed via protected_settings rather than settings because it carries
-# var.provisioning_secret. protected_settings is encrypted to a certificate only Azure and
-# the VM hold, is never echoed back by the ARM API, and is marked sensitive in the provider
-# schema, so a plan shows "(sensitive value)" for it. settings would publish the script in
-# plain text to anyone with reader on the resource group.
+# The script no longer carries a secret, but it stays in protected_settings: moving it to
+# settings would be a churn-only change to a resource whose every update re-runs the whole
+# script. protected_settings is encrypted to a certificate only Azure and the VM hold, is
+# never echoed back by the ARM API, and is sensitive in the provider schema, so a plan shows
+# "(sensitive value)" for it; `terraform console` on local.setup_script shows the script.
 #
-# Rotation rides on the same re-run. A new secret changes the rendered script, terraform
-# updates protected_settings in place, ARM hands the extension a new sequence number, and
-# the handler re-runs any sequence higher than the last one it ran (mrseq in
-# Azure/custom-script-extension-linux). The script then rewrites provisioning.env and
-# restarts the service.
+# A changed script updates protected_settings in place, ARM hands the extension a new
+# sequence number, and the handler re-runs any sequence higher than the last one it ran
+# (mrseq in Azure/custom-script-extension-linux).
 #
 # The extension reports the last 4 KiB each of the script's stdout and stderr back to ARM
 # as its status message, readable by anyone with reader on the VM. The script runs under
-# `set -x`, so it turns tracing off around the one step that handles the secret.
+# `set -x`, so it turns tracing off around the one step that reads the household key.
 resource "azurerm_virtual_machine_extension" "cloud_init" {
   name                       = "cloud-init"
   virtual_machine_id         = azurerm_linux_virtual_machine.this.id

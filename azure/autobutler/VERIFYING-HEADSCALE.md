@@ -58,11 +58,11 @@ sudo cat /var/log/azure/custom-script/handler.log
 
 ## Layer 3 -- a real node joins
 
-This is the actual proof. The setup script has already created the `quark` user, so mint a short-lived key for it on
-the server:
+This is the actual proof. Create a throwaway user and mint a short-lived key for it on the server:
 
 ```bash
-sudo headscale users list                     # note the ID of quark
+sudo headscale users create verify-layer-3
+sudo headscale users list                     # note the ID of verify-layer-3
 sudo headscale preauthkeys create --user <id> --expiration 1h
 ```
 
@@ -84,33 +84,35 @@ sudo headscale nodes list
 ```
 
 A node in that list means coordination, key exchange, and MagicDNS assignment all work. **That is headscale
-working**, with zero quark code involved.
+working**, with zero quark code involved. Delete the node, then `sudo headscale users destroy --identifier <id>`.
 
 ## Layer 4 -- the provisioning service
 
-This is quark's binary, not headscale, and it is a separate question. Nothing about it is set up by hand. Its one
-secret, `PROVISIONING_SECRET`, comes from the `QUARK_PROVISIONING_SECRET` org secret through
-`TF_VAR_quark_headscale_provisioning_secret`. Its household HMAC key, `PROVISIONING_HOUSEHOLD_KEY`, is generated on
-the VM on first run, into `/var/lib/headscale/provisioning-household.key`, and never touches Terraform. The setup
-script writes both into `/etc/quark/provisioning.env` and starts the service. There is no headscale API key: the
+This is quark's binary, not headscale, and it is a separate question. Nothing about it is set up by hand. The
+endpoint takes no secret. Its one setting, the household HMAC key `PROVISIONING_HOUSEHOLD_KEY`, is generated on the
+VM on first run, into `/var/lib/headscale/provisioning-household.key`, and never touches Terraform. The setup
+script writes it into `/etc/quark/provisioning.env` and starts the service. There is no headscale API key: the
 service mints keys through the local `headscale` CLI.
 
-Run this on the VM, so the secret goes from the env file to curl without being printed or copied anywhere:
+Check the service, then enroll from anywhere:
 
 ```bash
 sudo systemctl status quark-provisioning
-SECRET="$(sudo sed -n 's/^PROVISIONING_SECRET=//p' /etc/quark/provisioning.env)"
-curl -s -X POST https://quark.ts.autobutler.org/provision \
-  -H "X-Provisioning-Secret: $SECRET" \
-  -H "Content-Type: application/json" \
-  -d '{"device_id": "verify-layer-4"}'
-unset SECRET
+curl -X POST https://quark.ts.autobutler.org/provision \
+  -H 'Content-Type: application/json' \
+  -d '{"device_id":"smoke-test"}'
 ```
 
-A binary built from `provisioning_repo_ref` `v0.37.0` still wants `HEADSCALE_API_KEY`, and it restart-loops on
-`log.Fatal`. That is expected until the ref is bumped to a quark release with autobutler-org/quark#1877.
+A `200` carries `auth_key`, `household` and `household_token`. Each first enrollment creates a new headscale user,
+the household, so destroy the smoke-test one afterward on the VM:
 
-A `200` carries an `auth_key`. The service allows five calls per hour, so do not loop this.
+```bash
+sudo headscale users list                     # note the ID of the household the curl returned
+sudo headscale users destroy --identifier <id>
+```
+
+A first enrollment is limited to five per hour per IP, so do not loop this. The old shared `quark` user may still
+be listed: nodes enrolled before the households release live under it until they re-enroll. Leave it alone.
 
 If layer 3 passes and layer 4 fails, the tailnet is fine and the problem is quark's service. See
 `modules/headscale/README.md` for what it needs and where each value comes from.

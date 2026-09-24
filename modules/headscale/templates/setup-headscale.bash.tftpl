@@ -272,7 +272,6 @@ Requires=headscale.service
 Type=simple
 User=headscale
 Environment=PROVISIONING_LISTEN_ADDR=127.0.0.1:8081
-Environment=HEADSCALE_USER=quark
 EnvironmentFile=${config_dir}/provisioning.env
 ExecStart=/usr/local/bin/${service_name}
 Restart=on-failure
@@ -282,26 +281,25 @@ RestartSec=5
 WantedBy=multi-user.target
 UNIT
 
-# -- 8. Provisioning secrets ------------------------------------------------
-# PROVISIONING_SECRET comes from var.provisioning_secret, via protected_settings. It stays
-# until the provisioning pin moves past autobutler-org/quark#1879: the binary pinned today
-# exits without it.
-#
+# -- 8. Household key ------------------------------------------------------
 # PROVISIONING_HOUSEHOLD_KEY is the HMAC key for household tokens (autobutler-org/quark#2358);
-# a binary that predates it ignores it. It is generated here, once, and never passes through
+# the service exits without it. It is generated here, once, and never passes through
 # Terraform, state or CI. It lives next to the headscale database because it shares that
 # database's lifetime: every household token a Quark holds was signed with it. NEVER
 # regenerate an existing key -- a new key invalidates every token, and every Quark would have
 # to re-enroll. Only a missing or empty file (never used to sign anything) gets a new one.
 #
-# provisioning.env is owned by this script and rewritten whole on every run, from the
-# variable and from the key file, which is also how a rotated secret lands; a hand edit is
-# lost on the next apply.
+# provisioning.env is owned by this script and rewritten whole on every run from the key
+# file; a hand edit is lost on the next apply.
 #
-# Tracing is off for this block: under `set -x` bash would echo the decoded value to stderr,
-# and the extension reports stderr's tail to ARM. printf is a builtin and base64 reads a
-# here-string, so the value never appears in a process's argv either. mktemp creates the
-# file 0600 and mv swaps it in atomically, so the service never reads a half-written file.
+# There is no tailnet user to create: the service creates one headscale user per Quark, a
+# household, on its first enrollment. The shared `quark` user an older binary minted every
+# key for is left alone, because nodes still live under it until they re-enroll.
+#
+# Tracing is off for this block: under `set -x` bash would echo the key to stderr, and the
+# extension reports stderr's tail to ARM. printf is a builtin, so the value never appears in
+# a process's argv either. mktemp creates the file 0600 and mv swaps it in atomically, so
+# the service never reads a half-written file.
 set +x
 if [ ! -s "$${HOUSEHOLD_KEY_FILE}" ]; then
   KEY_TMP="$(mktemp /var/lib/headscale/.provisioning-household.key.XXXXXX)"
@@ -312,30 +310,16 @@ if [ ! -s "$${HOUSEHOLD_KEY_FILE}" ]; then
 fi
 mkdir -p ${config_dir}
 ENV_TMP="$(mktemp ${config_dir}/.provisioning.env.XXXXXX)"
-SECRET="$(base64 -d <<<'${secret_b64}')"
 HOUSEHOLD_KEY="$(<"$${HOUSEHOLD_KEY_FILE}")"
-printf 'PROVISIONING_SECRET=%s\nPROVISIONING_HOUSEHOLD_KEY=%s\n' "$${SECRET}" "$${HOUSEHOLD_KEY}" > "$${ENV_TMP}"
-unset SECRET HOUSEHOLD_KEY
+printf 'PROVISIONING_HOUSEHOLD_KEY=%s\n' "$${HOUSEHOLD_KEY}" > "$${ENV_TMP}"
+unset HOUSEHOLD_KEY
 chown headscale:headscale "$${ENV_TMP}"
 mv -f "$${ENV_TMP}" ${config_dir}/provisioning.env
 set -x
-log "Wrote PROVISIONING_SECRET and PROVISIONING_HOUSEHOLD_KEY to ${config_dir}/provisioning.env."
+log "Wrote PROVISIONING_HOUSEHOLD_KEY to ${config_dir}/provisioning.env."
 
-# -- 9. Tailnet user --------------------------------------------------------
-# The shared user the pinned provisioning binary mints every key for. Under the policy above
-# its nodes only reach each other, so it is a household of its own until the pin moves to a
-# binary that creates one user per household; it goes away with that bump. Must match
-# HEADSCALE_USER in the unit above. The socket appears a moment after headscale starts,
-# hence the retry on the first call.
-retry headscale users list >/dev/null
-if headscale users list -o json | jq -e '.[]? | select(.name == "quark")' >/dev/null; then
-  log "headscale user quark already exists."
-else
-  headscale users create quark
-fi
-
-# -- 10. Start ---------------------------------------------------------------
-# restart rather than start, so a re-run picks up a rebuilt binary and a rotated secret.
+# -- 9. Start --------------------------------------------------------------
+# restart rather than start, so a re-run picks up a rebuilt binary.
 systemctl daemon-reload
 systemctl enable ${service_name}
 systemctl restart ${service_name}

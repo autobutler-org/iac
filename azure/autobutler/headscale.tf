@@ -2,7 +2,7 @@
 #
 # modules/headscale/README.md is the contract with the quark codebase: the endpoints it
 # exposes, the constant in remoteutil.go that has to point at them, and where the
-# provisioning service's shared secret comes from. Read it before changing a domain here.
+# provisioning service's household key comes from. Read it before changing a domain here.
 #
 # VERIFYING-HEADSCALE.md, next to this file, is how to prove the server works after an
 # apply -- without any quark change, because the stock Tailscale client takes
@@ -34,13 +34,12 @@ module "quark_headscale" {
   admin_email           = var.quark_headscale_admin_email
   admin_username        = "quark"
   admin_ssh_public_key  = var.quark_headscale_ssh_public_key
-  provisioning_secret   = var.quark_headscale_provisioning_secret
 
   # A release tag, never a branch: the setup script re-clones on every apply, and a merged
-  # branch gets deleted (the old feat/1876 pin failed that way). v0.42.0 is the newest
-  # release and carries quark#1877, the provisioning service that shells out to the
-  # headscale CLI. Bump it to the release with quark#2358 together with the env changes.
-  provisioning_repo_ref = "v0.42.0"
+  # branch gets deleted (the old feat/1876 pin failed that way). v0.43.0 is the release
+  # with quark#2358 (one headscale user per Quark, signed with PROVISIONING_HOUSEHOLD_KEY)
+  # and quark#1879 (no provisioning secret), matching the setup script's env.
+  provisioning_repo_ref = "v0.43.0"
 
   # With the zone passed in, the module owns its own A record as an alias to the public IP
   # resource. That removes the apply -> read the IP -> create the record -> apply again
