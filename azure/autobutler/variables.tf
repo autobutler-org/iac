@@ -45,3 +45,15 @@ variable "tailnet_dns_zone" {
   type        = string
   default     = "ts.autobutler.org"
 }
+
+variable "quark_instance_version" {
+  description = "Tag of ghcr.io/autobutler-org/quark the public quark instance runs, bare semver. Bump it here to upgrade; see quark-instance.tf."
+  type        = string
+  default     = "0.42.0"
+}
+
+variable "cloud_dns_zone" {
+  description = "Public DNS zone delegated to Azure for internet-facing services. Its parent stays at Porkbun; only this label is delegated."
+  type        = string
+  default     = "cloud.autobutler.org"
+}

@@ -26,3 +26,15 @@ resource "azurerm_dns_zone" "tailnet" {
   resource_group_name = azurerm_resource_group.dns.name
   tags                = local.tags
 }
+
+# Public services, delegated the same way as ts above and for the same reasons. ts is for
+# the tailnet; this one is for things served on the open internet.
+#
+# ONE-TIME MANUAL STEP: after the first apply, create NS records for `cloud` at Porkbun from
+# the `cloud_dns_zone_nameservers` output. Until then nothing under it resolves, and Caddy
+# on the quark instance keeps retrying its certificate.
+resource "azurerm_dns_zone" "cloud" {
+  name                = var.cloud_dns_zone
+  resource_group_name = azurerm_resource_group.dns.name
+  tags                = local.tags
+}
