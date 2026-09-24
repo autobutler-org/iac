@@ -40,8 +40,11 @@ resource "azurerm_container_group" "quark" {
   }
 
   container {
-    name   = "caddy"
-    image  = "caddy:2"
+    name = "caddy"
+    # Docker Hub's official image, through AWS's public mirror. ACI pulls from Docker Hub
+    # anonymously out of shared Azure IPs and hits its rate limit ("An error response is
+    # received from the docker registry 'index.docker.io'"), which failed the first apply.
+    image  = "public.ecr.aws/docker/library/caddy:2"
     cpu    = 0.25
     memory = 0.5
 
