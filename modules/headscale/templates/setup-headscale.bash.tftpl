@@ -77,7 +77,10 @@ if [ -f /var/lib/headscale/db.sqlite ] && [ "$${HS_INSTALLED}" != "$${HS_VER}" ]
   fi
   log "Backed up the $${HS_INSTALLED} database and household key before installing $${HS_VER}."
 fi
-dpkg -i /tmp/headscale.deb
+# The package ships its own config.yaml, and ours (written below) differs, so an upgrade
+# asks which to keep. The extension has no stdin, so the prompt aborts the install.
+# Keep ours without asking: it is rewritten right after this anyway.
+dpkg -i --force-confdef --force-confold /tmp/headscale.deb
 
 mkdir -p /etc/headscale /var/lib/headscale
 
