@@ -42,28 +42,57 @@ the internet inside TLS.
 
 ## ACL policy
 
-headscale loads `/etc/headscale/policy.hujson`, which the setup script writes as an
-explicit allow-all:
+headscale loads `/etc/headscale/policy.hujson`, which the setup script writes as one grant:
 
 ```json
 {
-  "acls": [
-    { "action": "accept", "src": ["*"], "dst": ["*:*"] },
-    { "action": "accept", "src": ["*"], "dst": ["*:*"], "proto": "icmp" }
+  "grants": [
+    { "src": ["autogroup:member"], "dst": ["autogroup:self"], "ip": ["tcp:80"] }
   ]
 }
 ```
 
-Two rules, because in 0.28 a rule with no `proto` covers only TCP and UDP, and
-`"proto": "*"` is rejected. The second rule keeps `ping` working between nodes.
+A headscale user is a household: one per Quark, with the owner's phones enrolled under the
+same user (autobutler-org/quark#2320). The grant lets every node reach the other nodes of its
+own user on `tcp:80`, Quark's HTTP port, and nothing else. Households cannot see each other,
+and adding a household or a device never edits the policy or reloads headscale.
 
-Every node may reach every node. The tailnet is open by design: access control is quark's
-own HTTP login, not the network. Tightening the policy is future work, tied to how an
-owner's phone pairs with their quark.
+- **Needs headscale 0.29.2 or later.** Grants arrived in 0.29.0, and 0.29.2 fixed the
+  reconnect storm an `autogroup:self` policy could set off (juanfont/headscale#3358).
+- **A Quark is never tagged.** Tagged nodes are excluded from `autogroup:self`, and a tag
+  as the source of an `autogroup:self` grant fails to load.
+- **No ICMP.** `ping` between nodes fails. That is the policy, not a broken tailnet.
+- **Phones never listen.** The grant covers a phone's port 80 too, and it stays harmless
+  only because nothing listens there.
 
-The rule is spelled out rather than left implicit. In headscale 0.28 omitting `acls` also
-means allow-all, but an empty `acls` list means deny-all, and a file that relies on a
-missing key hides which of the two was meant.
+Checked against v0.29.4 before it shipped: `headscale policy check` accepts it, and the
+compiled filter for a node lists only its own user's addresses as sources, on TCP port 80.
+`azure/autobutler/VERIFYING-HEADSCALE.md` (layer 5) is how to prove it on the live server.
+
+## The household key
+
+`PROVISIONING_HOUSEHOLD_KEY` is the HMAC key the provisioning service signs household
+tokens with (autobutler-org/quark#2358). It is **never in Terraform, state, a planfile or
+CI**. The setup script generates it on the VM the first time it runs
+(`openssl rand -base64 48`), into `/var/lib/headscale/provisioning-household.key`, mode
+`600`, owner `headscale`. On every run it copies the file into `provisioning.env`, with
+tracing off.
+
+The key lives and dies with the headscale database. Every household token a Quark holds was
+signed with it, and every household it names is a user in that database, so the two
+are only useful together. The script never replaces an existing key, and the pre-upgrade
+backup copies it alongside `db.sqlite`.
+
+**Losing the key, or replacing it, means every Quark must re-enroll** (Disable, then
+Enable): their tokens no longer verify. To restore a VM, restore the key together with the
+database. There is no rotation procedure, on purpose.
+
+## No node expiry
+
+The config sets no `node.expiry`, so the default, `0`, applies: headscale sets no expiry of
+its own, and a node registered with a pre-auth key gets whatever expiry the client asks for.
+tsnet asks for none, so Quark and phone nodes never expire. An expiry would log a Quark out
+of the tailnet with nobody at the device to log it back in. Do not add one.
 
 ## What quark has to change
 
@@ -85,22 +114,24 @@ different tailnet without a code change. The constant is the default, not the on
 
 ## What the provisioning service needs
 
-Nothing by hand. The unit sets the plain configuration, and the setup script writes the one
-secret into `${config_dir}/provisioning.env` (`/etc/quark/provisioning.env`), mode `600`,
-owner `headscale`.
+Nothing by hand. The unit sets the plain configuration, and the setup script writes the two
+secrets (one from Terraform, one from the key file described above) into
+`${config_dir}/provisioning.env` (`/etc/quark/provisioning.env`), mode `600`, owner
+`headscale`.
 
-| Variable                        | Set by                                           | Required                     |
-| ------------------------------- | ------------------------------------------------ | ---------------------------- |
-| `PROVISIONING_LISTEN_ADDR`      | the unit (`127.0.0.1:8081`)                      | no, defaults to `:8081`      |
-| `HEADSCALE_USER`                | the unit (`quark`)                               | no, defaults to `quark`      |
-| `PROVISIONING_SECRET`           | the setup script, from `var.provisioning_secret` | yes — `log.Fatal` without it |
-| `PROVISIONING_KEY_EXPIRY_HOURS` | not set                                          | no                           |
+| Variable                        | Set by                                                  | Required                     |
+| ------------------------------- | ------------------------------------------------------- | ---------------------------- |
+| `PROVISIONING_LISTEN_ADDR`      | the unit (`127.0.0.1:8081`)                             | no, defaults to `:8081`      |
+| `HEADSCALE_USER`                | the unit (`quark`)                                      | no, defaults to `quark`      |
+| `PROVISIONING_SECRET`           | the setup script, from `var.provisioning_secret`        | yes — `log.Fatal` without it |
+| `PROVISIONING_HOUSEHOLD_KEY`    | the setup script, from the key file on the VM           | ignored by the pinned binary |
+| `PROVISIONING_KEY_EXPIRY_HOURS` | not set                                                 | no                           |
 
 There is no headscale API key. The service mints pre-auth keys by running the local
 `headscale` CLI (autobutler-org/quark#1877), which reaches headscale over its unix socket:
 
 - **Socket.** The config sets neither `unix_socket` nor `unix_socket_permission`, so
-  headscale 0.28's defaults apply: `/var/run/headscale/headscale.sock`, mode `0770`. It
+  headscale's defaults apply: `/var/run/headscale/headscale.sock`, mode `0770`. It
   sits in `/run/headscale`, the `RuntimeDirectory` of the packaged `headscale.service`,
   which is `0750` and owned by `headscale`. The provisioning unit runs as `User=headscale`,
   which is what grants it access.
@@ -142,6 +173,9 @@ the client, and both sides read it from one place:
 5. **The VM.** The script decodes the value with tracing off, since the extension reports
    the tail of stderr to ARM, and writes it to `/etc/quark/provisioning.env`. Then it
    restarts `quark-provisioning`.
+
+`PROVISIONING_SECRET` goes away once the provisioning pin moves to a binary that no longer
+reads it (autobutler-org/quark#1879). The binary pinned today exits without it.
 
 **Rotating the secret:**
 

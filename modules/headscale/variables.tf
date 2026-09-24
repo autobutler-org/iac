@@ -83,9 +83,9 @@ variable "allowed_ssh_cidr" {
 }
 
 variable "headscale_version" {
-  description = "Headscale release tag to install, e.g. v0.28.0. The leading v is stripped for the .deb filename by the setup script."
+  description = "Headscale release tag to install, e.g. v0.29.4. The leading v is stripped for the .deb filename by the setup script. Headscale refuses to skip a minor version or to downgrade one, so move this one minor at a time. The policy the setup script writes needs 0.29.2 or later: grants arrived in 0.29.0, and 0.29.2 fixed the autogroup:self reconnect storm."
   type        = string
-  default     = "v0.28.0"
+  default     = "v0.29.4"
 }
 
 variable "go_version" {
@@ -125,7 +125,7 @@ variable "provisioning_source_dir" {
 }
 
 variable "provisioning_config_dir" {
-  description = "Directory on the VM holding provisioning.env, which the setup script writes PROVISIONING_SECRET into on every run."
+  description = "Directory on the VM holding provisioning.env, which the setup script writes PROVISIONING_SECRET and PROVISIONING_HOUSEHOLD_KEY into on every run. The household key itself is generated on the VM and never passes through Terraform; see the module README."
   type        = string
   default     = "/etc/quark"
 }
