@@ -47,3 +47,18 @@ output "tailnet_dns_zone_name" {
   description = "The delegated public DNS zone. Its parent stays at Porkbun."
   value       = azurerm_dns_zone.tailnet.name
 }
+
+output "quark_instance_url" {
+  description = "Public HTTPS URL of the quark container instance."
+  value       = module.quark_instance.url
+}
+
+output "quark_instance_data_share" {
+  description = "Storage account and Azure Files share holding the quark instance's /var/lib/quark."
+  value       = "${module.quark_instance.storage_account_name}/${module.quark_instance.data_share_name}"
+}
+
+output "cloud_dns_zone_nameservers" {
+  description = "NS records to create for the cloud label at Porkbun. One-time step; until they exist nothing under the zone resolves and the quark instance cannot get a certificate."
+  value       = azurerm_dns_zone.cloud.name_servers
+}
