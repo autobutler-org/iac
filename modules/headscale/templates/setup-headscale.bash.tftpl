@@ -38,7 +38,11 @@ retry() {
 log "Installing system packages..."
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
+# apt also finishes configuring any half-installed package (a headscale upgrade that
+# stopped at its conffile prompt), so it needs the same no-prompt conffile choice as
+# the dpkg -i below.
 apt-get install -y -qq \
+  -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
   curl wget jq git nginx certbot python3-certbot-nginx \
   ca-certificates gnupg lsb-release
 
