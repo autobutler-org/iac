@@ -150,22 +150,40 @@ nothing reads exactly like an analysis that found nothing. What lints the Terraf
 
 ## Dependency updates
 
-`.github/dependabot.yml` covers the three ecosystems this repo has: `github-actions` (the
-action versions the workflows pin), `terraform` (the `azurerm` provider constraint) and
-`npm` (`markdownlint-cli2`, the one devDependency). Weekly, grouped into one pull request
-per ecosystem.
+Renovate, through the Mend-hosted GitHub App, keeps dependencies current. The org-wide
+policy lives in
+[autobutler-org/renovate-config](https://github.com/autobutler-org/renovate-config), in
+`org-inherited-config.json`: `config:recommended`, weekly, and one grouped pull request per
+ecosystem. Change it there, not here. Renovate's runs, logs and job status are on the
+[Mend dashboard](https://developer.mend.io/github/autobutler-org).
+
+`renovate.json` in this repo holds only what is specific to iac:
+
+- `enabledManagers` limits Renovate to the three ecosystems this repo has:
+  `github-actions` (the action versions the workflows pin), `terraform` (the `azurerm`
+  provider constraint) and `npm` (`markdownlint-cli2`, the one devDependency). The fourth
+  entry is the custom manager below.
+- A regex manager that reads the `# renovate:` comment above `quark_instance_version` in
+  `azure/autobutler/variables.tf` and tracks `ghcr.io/autobutler-org/quark` tags. Keep
+  that comment directly above the `default` line, or Renovate stops seeing the version.
+- A rule that auto-merges quark image bumps as soon as a tag is published, outside the
+  weekly schedule. The merge to `main` runs `apply.yml`, so a new quark release deploys
+  without anyone touching it. This needs "Allow auto-merge" on in the repo settings, and
+  the required checks on `main` passing. Required reviewers on the `production`
+  environment would hold every one of those applies for approval. Nothing else
+  auto-merges.
 
 A `markdownlint-cli2` bump can fail `check/markdown` on Markdown nobody edited, because a
 minor release may add or tighten rules. That is the tool working. Fix the prose, or turn
 off the single new rule in `.markdownlint.yaml` with a comment saying why — never blanket-
 disable, same as the tflint policy below.
 
-**Check the lock file diff on every Terraform update from Dependabot.** Dependabot
-regenerates `.terraform.lock.hcl` when it moves a provider constraint, and it has to infer
-which platforms the existing lock covered — falling back to `linux_amd64` alone if it infers
-none. A lock that shrank that way still passes every CI job, because CI is `linux_amd64`; it
-breaks the next `terraform init` on a darwin machine with a checksum mismatch, long after
-the merge that caused it. If the `h1:` list got shorter, run `make lock` on the branch.
+**Check the lock file diff on every Terraform update from Renovate.** Renovate
+regenerates `.terraform.lock.hcl` when it moves a provider, and the result has to keep all
+four platforms this repo commits. A lock that shrank still passes every CI job, because CI
+is `linux_amd64`; it breaks the next `terraform init` on a darwin machine with a checksum
+mismatch, long after the merge that caused it. If the `h1:` list got shorter, run
+`make lock` on the branch.
 
 ## Plan locally, apply through CI
 
@@ -188,7 +206,7 @@ a half-applied change.
 `.terraform.lock.hcl` **is** committed, and it covers four platforms (`linux_amd64`,
 `linux_arm64`, `darwin_amd64`, `darwin_arm64`). A plain `terraform init` on one machine
 shrinks it to that machine's platform; if a diff drops platform hashes, that is a
-regression, not a cleanup. Regenerate with `make lock`. A Dependabot provider bump can
+regression, not a cleanup. Regenerate with `make lock`. A Renovate provider bump can
 shrink it the same way — see **Dependency updates** under CI.
 
 ## Importing existing Azure resources

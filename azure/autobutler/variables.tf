@@ -47,9 +47,10 @@ variable "tailnet_dns_zone" {
 }
 
 variable "quark_instance_version" {
-  description = "Tag of ghcr.io/autobutler-org/quark the public quark instance runs, bare semver. Bump it here to upgrade; see quark-instance.tf."
+  description = "Tag of ghcr.io/autobutler-org/quark the public quark instance runs, bare semver. Renovate bumps it; see quark-instance.tf."
   type        = string
-  default     = "0.42.0"
+  # renovate: datasource=docker depName=ghcr.io/autobutler-org/quark
+  default = "0.42.0"
 }
 
 variable "cloud_dns_zone" {
