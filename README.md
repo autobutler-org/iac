@@ -115,7 +115,7 @@ The Terraform is covered by `tflint` with the `azurerm` ruleset in `check.yml`.
 
 Renovate keeps the things here that go stale current: the action versions the workflows
 pin, the `azurerm` provider constraint, the Markdown linter, and the quark image the public
-instance runs. The weekly, grouped policy is shared across the org in
+instance runs. The daily, grouped policy is shared across the org in
 [autobutler-org/renovate-config](https://github.com/autobutler-org/renovate-config);
 `renovate.json` here adds the quark image and auto-merges its bumps, so a new quark release
 deploys on its own. Renovate replaced Dependabot because Dependabot cannot track an image

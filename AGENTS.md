@@ -153,7 +153,7 @@ nothing reads exactly like an analysis that found nothing. What lints the Terraf
 Renovate, through the Mend-hosted GitHub App, keeps dependencies current. The org-wide
 policy lives in
 [autobutler-org/renovate-config](https://github.com/autobutler-org/renovate-config), in
-`org-inherited-config.json`: `config:recommended`, weekly, and one grouped pull request per
+`org-inherited-config.json`: `config:recommended`, daily, and one grouped pull request per
 ecosystem. Change it there, not here. Renovate's runs, logs and job status are on the
 [Mend dashboard](https://developer.mend.io/github/autobutler-org).
 
@@ -167,7 +167,7 @@ ecosystem. Change it there, not here. Renovate's runs, logs and job status are o
   `azure/autobutler/variables.tf` and tracks `ghcr.io/autobutler-org/quark` tags. Keep
   that comment directly above the `default` line, or Renovate stops seeing the version.
 - A rule that auto-merges quark image bumps as soon as a tag is published, outside the
-  weekly schedule. The merge to `main` runs `apply.yml`, so a new quark release deploys
+  daily 4am window. The merge to `main` runs `apply.yml`, so a new quark release deploys
   without anyone touching it. This needs "Allow auto-merge" on in the repo settings, and
   the required checks on `main` passing. Required reviewers on the `production`
   environment would hold every one of those applies for approval. Nothing else
