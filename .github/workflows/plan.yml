@@ -66,7 +66,7 @@ jobs:
       # QUARK_PROVISIONING_SECRET is an organization secret shared with this repo and quark.
       # It is not treated as confidential: it lands in the planfile artifact and in state.
       # apply.yml needs no TF_VAR, because it applies this saved plan. A run that gets no
-      # secrets (a fork or Dependabot PR) fails the variable's validation and cannot plan.
+      # secrets (a fork PR) fails the variable's validation and cannot plan.
       - name: Plan
         env:
           TF_VAR_quark_headscale_provisioning_secret: ${{ secrets.QUARK_PROVISIONING_SECRET }}

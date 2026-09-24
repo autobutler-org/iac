@@ -101,7 +101,7 @@ set.
 One Actions secret is used all the same, and it is not an Azure credential. The
 `QUARK_PROVISIONING_SECRET` organization secret becomes the headscale provisioning service's
 shared secret, as described in `modules/headscale/README.md`. A run that gets no secrets,
-such as a fork or Dependabot pull request, cannot plan. `check.yml` does not need the
+such as a fork pull request, cannot plan. `check.yml` does not need the
 secret and still runs for those pull requests.
 
 `codeql.yml` is a deliberately narrow fourth workflow. CodeQL supports neither Terraform nor
@@ -113,11 +113,16 @@ languages the repository has no code in would turn the security tab green over a
 of nothing, which is a worse outcome than no scan at all, because it looks like coverage.
 The Terraform is covered by `tflint` with the `azurerm` ruleset in `check.yml`.
 
-`.github/dependabot.yml` keeps the two things here that go stale current: the action
-versions the workflows pin, and the `azurerm` provider constraint. Weekly, one grouped pull
-request per ecosystem. The one thing to watch on a provider bump is the lock file — see
-AGENTS.md, "Dependency updates" — because Dependabot regenerates it and can leave it
-covering fewer platforms than the four this repo commits, in a way CI cannot see.
+Renovate keeps the things here that go stale current: the action versions the workflows
+pin, the `azurerm` provider constraint, the Markdown linter, and the quark image the public
+instance runs. The daily, grouped policy is shared across the org in
+[autobutler-org/renovate-config](https://github.com/autobutler-org/renovate-config);
+`renovate.json` here adds the quark image and auto-merges its bumps, so a new quark release
+deploys on its own. Renovate replaced Dependabot because Dependabot cannot track an image
+tag held in a Terraform variable. Renovate's runs and logs are on the
+[Mend dashboard](https://developer.mend.io/github/autobutler-org). The one thing to watch on a provider bump is the lock
+file — see AGENTS.md, "Dependency updates" — because Renovate regenerates it, and a lock
+covering fewer than the four platforms this repo commits passes CI anyway.
 
 ## Adding a subscription
 

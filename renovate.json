@@ -1,0 +1,24 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "enabledManagers": ["github-actions", "terraform", "npm", "custom.regex"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "The quark image tag the public quark instance runs.",
+      "managerFilePatterns": ["/^azure/autobutler/variables\\.tf$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+default\\s*=\\s*\"(?<currentValue>[^\"]+)\""
+      ]
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Deploy new quark releases as soon as they are published: merging runs apply.yml.",
+      "matchDepNames": ["ghcr.io/autobutler-org/quark"],
+      "schedule": ["at any time"],
+      "automerge": true,
+      "platformAutomerge": true,
+      "commitMessagePrefix": "chore(deps/quark):"
+    }
+  ]
+}
