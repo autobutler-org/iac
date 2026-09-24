@@ -37,8 +37,8 @@ headscale's gRPC (50443) is **not** exposed. It listens on `127.0.0.1:50443`, so
 rule would grant nothing; reach it over SSH if you need remote CLI admin.
 
 The provisioning service is not exposed either. It listens on `127.0.0.1:8081`, and nginx
-proxies `https://<control server>/provision` to it, so the shared secret only ever crosses
-the internet inside TLS.
+proxies `https://<control server>/provision` to it, so auth keys and household tokens only
+ever cross the internet inside TLS.
 
 ## ACL policy
 
@@ -114,17 +114,15 @@ different tailnet without a code change. The constant is the default, not the on
 
 ## What the provisioning service needs
 
-Nothing by hand. The unit sets the plain configuration, and the setup script writes the two
-secrets (one from Terraform, one from the key file described above) into
-`${config_dir}/provisioning.env` (`/etc/quark/provisioning.env`), mode `600`, owner
-`headscale`.
+Nothing by hand. The unit sets the plain configuration, and the setup script copies the
+household key from the key file described above into `${config_dir}/provisioning.env`
+(`/etc/quark/provisioning.env`), mode `600`, owner `headscale`. The endpoint takes no
+secret (autobutler-org/quark#1879).
 
 | Variable                        | Set by                                                  | Required                     |
 | ------------------------------- | ------------------------------------------------------- | ---------------------------- |
 | `PROVISIONING_LISTEN_ADDR`      | the unit (`127.0.0.1:8081`)                             | no, defaults to `:8081`      |
-| `HEADSCALE_USER`                | the unit (`quark`)                                      | no, defaults to `quark`      |
-| `PROVISIONING_SECRET`           | the setup script, from `var.provisioning_secret`        | yes — `log.Fatal` without it |
-| `PROVISIONING_HOUSEHOLD_KEY`    | the setup script, from the key file on the VM           | ignored by the pinned binary |
+| `PROVISIONING_HOUSEHOLD_KEY`    | the setup script, from the key file on the VM           | yes — `log.Fatal` without it |
 | `PROVISIONING_KEY_EXPIRY_HOURS` | not set                                                 | no                           |
 
 There is no headscale API key. The service mints pre-auth keys by running the local
@@ -140,72 +138,17 @@ There is no headscale API key. The service mints pre-auth keys by running the lo
 - **Binary.** The `.deb` installs `/usr/bin/headscale`, which is on systemd's default `PATH`,
   so the unit does not set `HEADSCALE_BIN`.
 
-`PROVISIONING_LISTEN_ADDR` and `HEADSCALE_USER` need autobutler-org/quark#1876, and the
-CLI-based minting needs #1877. The binary built from `v0.37.0` still requires
-`HEADSCALE_API_KEY`, so it exits with `log.Fatal` and `systemd` keeps restarting it. That is
-expected: it could not mint keys against 0.28 anyway. Bump `provisioning_repo_ref` to a
-release that includes both changes.
-
-## The shared secret
-
-> **Not confidential.** This value shows up in plan artifacts and in state, and quark
-> publishes it anyway (autobutler-org/quark#1879). Anything that must stay confidential
-> belongs in a data source, such as Key Vault, not in a `TF_VAR`.
-
-`PROVISIONING_SECRET` authorizes `POST /provision`, so it is the only thing between a
-caller and a valid tailnet enrollment key. quark's release build stamps the same value into
-the client, and both sides read it from one place:
-
-1. **GitHub.** The organization Actions secret `QUARK_PROVISIONING_SECRET`, shared with this
-   repository and autobutler-org/quark.
-2. **CI.** `plan.yml` sets it as `TF_VAR_quark_headscale_provisioning_secret` on the Plan
-   step only.
-3. **Terraform.** The root variable `quark_headscale_provisioning_secret` feeds this
-   module's `provisioning_secret`. Both are `sensitive`, and the module rejects anything
-   shorter than 32 characters or outside the base64, base64url and hex alphabets, since
-   the value lands unquoted in a systemd `EnvironmentFile`.
-4. **The extension.** `templatefile` renders the value, base64-encoded, into the setup
-   script, and the script travels in the CustomScript extension's `protected_settings`.
-   That attribute is sensitive in the provider schema, so a plan shows it as
-   `(sensitive value)`, and ARM never returns it. The extension takes `script` or
-   `commandToExecute` but not both, so passing the secret as an environment variable
-   would mean inlining the whole script into `commandToExecute`.
-5. **The VM.** The script decodes the value with tracing off, since the extension reports
-   the tail of stderr to ARM, and writes it to `/etc/quark/provisioning.env`. Then it
-   restarts `quark-provisioning`.
-
-`PROVISIONING_SECRET` goes away once the provisioning pin moves to a binary that no longer
-reads it (autobutler-org/quark#1879). The binary pinned today exits without it.
-
-**Rotating the secret:**
-
-1. Update the `QUARK_PROVISIONING_SECRET` org secret.
-2. Re-run apply: push to `main` or dispatch `apply.yml`. The new value changes
-   `protected_settings`, which updates the extension in place. ARM gives it a new
-   sequence number, and the handler re-runs the script, which rewrites the env file and
-   restarts the service.
-3. Cut a quark release, so the client carries the new value.
-
-Until step 3 ships, released clients send the old value and get refused. That re-run is
-the whole setup script, not just the secret step. It rebuilds the binary and restarts
-headscale, which briefly interrupts the control plane without touching the database.
-
-**Where the value ends up.** State holds the extension's `protected_settings`, the
-rendered script with the secret in it. State is the `azure/autobutler.tfstate` blob in the
-`tfstate` container of the `stautobutlertfstate` storage account, in the `autobutler`
-subscription (see `azure/autobutler/backend.tf`). Reading it takes Entra ID RBAC on the
-account. The planfile artifact CI uploads carries the variable and a copy of state too.
-
-A local `make plan` needs the variable exported. Any valid value works for a plan. Anything
-other than the real value shows the `cloud-init` extension changing, and a local plan is
-never applied.
+The service creates one headscale user per Quark, a household, on its first enrollment
+(autobutler-org/quark#2358), so the setup script creates no tailnet user. Servers set up
+before that release have a shared `quark` user. The script leaves it alone: its nodes stay
+under it until each Quark re-enrolls (Disable, then Enable remote access), and it can be
+destroyed once `headscale nodes list --user quark` is empty.
 
 ## Bringing a server up
 
 1. **Apply.** Terraform creates the VM and the DNS alias record, then runs the setup script.
    The script installs headscale and nginx, and it tries for a certificate. It builds and
-   starts the provisioning service with its secret in place, and it creates the `quark`
-   tailnet user if that user does not exist yet.
+   starts the provisioning service with its household key in place.
 
 2. **Delegate the zone.** This is the one manual step, done once for a new zone. Take the
    `tailnet_dns_zone_nameservers` output and create matching `NS` records for the delegated
@@ -229,11 +172,14 @@ Clients call the provisioning service, which mints a headscale pre-auth key on t
 
 ```http
 POST https://quark.ts.autobutler.org/provision
-X-Provisioning-Secret: <PROVISIONING_SECRET>
 Content-Type: application/json
 
 {"device_id": "<stable per-device id>"}
 ```
+
+A first enrollment creates a household and returns `auth_key`, `household` and
+`household_token`. Pairing another device into that household sends `household` and
+`household_token` alongside `device_id`.
 
 ## Operating notes
 
