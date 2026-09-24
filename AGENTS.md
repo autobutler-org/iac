@@ -153,11 +153,12 @@ nothing reads exactly like an analysis that found nothing. What lints the Terraf
 Renovate, through the Mend-hosted GitHub App, keeps dependencies current. The org-wide
 policy lives in
 [autobutler-org/renovate-config](https://github.com/autobutler-org/renovate-config), in
-`org-inherited-config.json`: `config:recommended`, daily, and one grouped pull request per
-ecosystem. Change it there, not here. Renovate's runs, logs and job status are on the
+`default.json`: `config:recommended`, daily, and one grouped pull request per ecosystem.
+Change it there, not here. Renovate's runs, logs and job status are on the
 [Mend dashboard](https://developer.mend.io/github/autobutler-org).
 
-`renovate.json` in this repo holds only what is specific to iac:
+`renovate.json` in this repo extends that preset by name
+(`github>autobutler-org/renovate-config`), then adds only what is specific to iac:
 
 - `enabledManagers` limits Renovate to the three ecosystems this repo has:
   `github-actions` (the action versions the workflows pin), `terraform` (the `azurerm`
