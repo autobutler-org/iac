@@ -66,7 +66,7 @@ sudo headscale users list                     # note the ID of quark
 sudo headscale preauthkeys create --user <id> --expiration 1h
 ```
 
-> In v0.28.0 `--user` takes the numeric user ID, not the name. It has taken a name at other points, so check
+> In v0.28.0 and v0.29.4 `--user` takes the numeric user ID, not the name. It has taken a name at other points, so check
 > `headscale preauthkeys create --help` on the host after a version bump.
 
 Then join from anywhere. A container is cleanest: nothing is installed on your machine, and the node is gone when
@@ -90,8 +90,10 @@ working**, with zero quark code involved.
 
 This is quark's binary, not headscale, and it is a separate question. Nothing about it is set up by hand. Its one
 secret, `PROVISIONING_SECRET`, comes from the `QUARK_PROVISIONING_SECRET` org secret through
-`TF_VAR_quark_headscale_provisioning_secret`, and the setup script writes it into `/etc/quark/provisioning.env` and
-starts the service. There is no headscale API key: the service mints keys through the local `headscale` CLI.
+`TF_VAR_quark_headscale_provisioning_secret`. Its household HMAC key, `PROVISIONING_HOUSEHOLD_KEY`, is generated on
+the VM on first run, into `/var/lib/headscale/provisioning-household.key`, and never touches Terraform. The setup
+script writes both into `/etc/quark/provisioning.env` and starts the service. There is no headscale API key: the
+service mints keys through the local `headscale` CLI.
 
 Run this on the VM, so the secret goes from the env file to curl without being printed or copied anywhere:
 
@@ -112,6 +114,38 @@ A `200` carries an `auth_key`. The service allows five calls per hour, so do not
 
 If layer 3 passes and layer 4 fails, the tailnet is fine and the problem is quark's service. See
 `modules/headscale/README.md` for what it needs and where each value comes from.
+
+## Layer 5 -- households are isolated
+
+The policy is one grant: a node reaches the nodes of its own headscale user on `tcp:80` and nothing else. Confirm
+headscale loaded it and runs 0.29.2 or later:
+
+```bash
+headscale version
+sudo headscale policy get
+```
+
+Then prove it with two users. Mint a key for each (layer 3), then join three containers: two under `house-a`, one
+under `house-b`. On the first `house-a` node, listen on 80 and on 8080:
+
+```bash
+sudo headscale users create house-a
+sudo headscale users create house-b
+docker exec -d <a1> nc -l -p 80
+docker exec -d <a1> nc -l -p 8080
+```
+
+From the second `house-a` node, port 80 connects and 8080 times out. From the `house-b` node, 80 times out too.
+Each listener takes one connection, so restart it between attempts:
+
+```bash
+docker exec <a2> sh -c 'nc -w 3 <a1-ip> 80 </dev/null && echo open'
+docker exec <a2> sh -c 'nc -w 3 <a1-ip> 8080 </dev/null && echo open'
+docker exec <b1> sh -c 'nc -w 3 <a1-ip> 80 </dev/null && echo open'
+```
+
+Delete the test nodes and users afterward. headscale will not delete a user that still has nodes, so delete the
+nodes first.
 
 ## Known: UDP 3478 answers nothing
 

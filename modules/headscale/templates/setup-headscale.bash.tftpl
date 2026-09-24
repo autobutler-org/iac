@@ -59,6 +59,24 @@ HS_VERSION=${headscale_version}
 HS_VER="$${HS_VERSION#v}"
 retry wget -q -O /tmp/headscale.deb \
   "https://github.com/juanfont/headscale/releases/download/$${HS_VERSION}/headscale_$${HS_VER}_linux_${arch}.deb"
+
+# A version change migrates the database: the package's postinst restarts headscale, which
+# runs the migrations on start. The database is the whole tailnet, is backed up nowhere, and
+# headscale refuses to downgrade, so copy it first. Stopping headscale checkpoints the WAL
+# into db.sqlite, so the one file is a consistent copy. Only on a version change, so a
+# plain re-run leaves no extra copy behind.
+# The household key (step 8) shares the database's lifetime, so it is copied with it.
+HOUSEHOLD_KEY_FILE=/var/lib/headscale/provisioning-household.key
+HS_INSTALLED="$(dpkg-query -W -f='$${Version}' headscale 2>/dev/null || true)"
+if [ -f /var/lib/headscale/db.sqlite ] && [ "$${HS_INSTALLED}" != "$${HS_VER}" ]; then
+  systemctl stop headscale
+  BAK_SUFFIX="$${HS_INSTALLED:-unknown}.bak"
+  cp -a /var/lib/headscale/db.sqlite "/var/lib/headscale/db.sqlite.$${BAK_SUFFIX}"
+  if [ -f "$${HOUSEHOLD_KEY_FILE}" ]; then
+    cp -a "$${HOUSEHOLD_KEY_FILE}" "$${HOUSEHOLD_KEY_FILE}.$${BAK_SUFFIX}"
+  fi
+  log "Backed up the $${HS_INSTALLED} database and household key before installing $${HS_VER}."
+fi
 dpkg -i /tmp/headscale.deb
 
 mkdir -p /etc/headscale /var/lib/headscale
@@ -108,18 +126,29 @@ policy:
   mode: file
   path: /etc/headscale/policy.hujson
 EOF
+# No node.expiry, on purpose. Its default, 0, sets no expiry of its own, so a node registered
+# with a pre-auth key gets whatever expiry the client asks for, and tsnet asks for none: Quark
+# and phone nodes never expire. Setting it would log every Quark out of the tailnet when it
+# lapsed, with nobody at the device to log it back in. (0.29 folded oidc.expiry into
+# node.expiry; no OIDC is configured here, so nothing moved.)
 
-# Allow all node-to-node traffic, spelled out so the intent is visible here. Access control
-# is quark's own HTTP login, not the tailnet; the tailnet is open by design. Tightening it is
-# future work, tied to how an owner's phone pairs with their quark. Beware: an empty "acls"
-# list is headscale's deny-all (docs/ref/acls.md), and omitting "acls" is an implicit allow-all.
-# A rule with no "proto" covers only TCP and UDP in 0.28, and "proto": "*" is rejected, so ICMP
-# (ping) needs a rule of its own.
+# One Headscale user per household: each Quark enrolls under a user of its own, and the
+# owner's phones join that same user. This one static grant is then the whole policy --
+# every member node may reach the nodes of its own user on tcp:80, Quark's HTTP port, and
+# nothing else. No node reaches another household, and adding a household or a device never
+# edits this file or reloads headscale (autobutler-org/quark#2320, #1582).
+#
+# - autogroup:self in a grant needs 0.29; 0.29.2 fixed the reconnect storm a self-policy
+#   change could set off. See var.headscale_version.
+# - A Quark must never be tagged: tagged nodes are excluded from autogroup:self, and a
+#   tagged source is rejected outright.
+# - The grant covers a phone too, but phones only dial and never listen, so port 80 on a
+#   phone has nothing behind it. Keep it that way in the app.
+# - No ICMP, so ping between nodes fails. That is expected, not a broken tailnet.
 cat > /etc/headscale/policy.hujson <<'POLICY'
 {
-  "acls": [
-    { "action": "accept", "src": ["*"], "dst": ["*:*"] },
-    { "action": "accept", "src": ["*"], "dst": ["*:*"], "proto": "icmp" }
+  "grants": [
+    { "src": ["autogroup:member"], "dst": ["autogroup:self"], "ip": ["tcp:80"] }
   ]
 }
 POLICY
@@ -246,29 +275,51 @@ RestartSec=5
 WantedBy=multi-user.target
 UNIT
 
-# -- 8. Provisioning secret -------------------------------------------------
-# From var.provisioning_secret, via protected_settings. The file is owned by this script
-# and rewritten whole on every run, which is also how a rotated secret lands; a hand edit
-# is lost on the next apply.
+# -- 8. Provisioning secrets ------------------------------------------------
+# PROVISIONING_SECRET comes from var.provisioning_secret, via protected_settings. It stays
+# until the provisioning pin moves past autobutler-org/quark#1879: the binary pinned today
+# exits without it.
+#
+# PROVISIONING_HOUSEHOLD_KEY is the HMAC key for household tokens (autobutler-org/quark#2358);
+# a binary that predates it ignores it. It is generated here, once, and never passes through
+# Terraform, state or CI. It lives next to the headscale database because it shares that
+# database's lifetime: every household token a Quark holds was signed with it. NEVER
+# regenerate an existing key -- a new key invalidates every token, and every Quark would have
+# to re-enroll. Only a missing or empty file (never used to sign anything) gets a new one.
+#
+# provisioning.env is owned by this script and rewritten whole on every run, from the
+# variable and from the key file, which is also how a rotated secret lands; a hand edit is
+# lost on the next apply.
 #
 # Tracing is off for this block: under `set -x` bash would echo the decoded value to stderr,
 # and the extension reports stderr's tail to ARM. printf is a builtin and base64 reads a
 # here-string, so the value never appears in a process's argv either. mktemp creates the
 # file 0600 and mv swaps it in atomically, so the service never reads a half-written file.
 set +x
+if [ ! -s "$${HOUSEHOLD_KEY_FILE}" ]; then
+  KEY_TMP="$(mktemp /var/lib/headscale/.provisioning-household.key.XXXXXX)"
+  openssl rand -base64 48 > "$${KEY_TMP}"
+  chown headscale:headscale "$${KEY_TMP}"
+  mv -f "$${KEY_TMP}" "$${HOUSEHOLD_KEY_FILE}"
+  log "Generated a new household key at $${HOUSEHOLD_KEY_FILE}."
+fi
 mkdir -p ${config_dir}
 ENV_TMP="$(mktemp ${config_dir}/.provisioning.env.XXXXXX)"
 SECRET="$(base64 -d <<<'${secret_b64}')"
-printf 'PROVISIONING_SECRET=%s\n' "$${SECRET}" > "$${ENV_TMP}"
-unset SECRET
+HOUSEHOLD_KEY="$(<"$${HOUSEHOLD_KEY_FILE}")"
+printf 'PROVISIONING_SECRET=%s\nPROVISIONING_HOUSEHOLD_KEY=%s\n' "$${SECRET}" "$${HOUSEHOLD_KEY}" > "$${ENV_TMP}"
+unset SECRET HOUSEHOLD_KEY
 chown headscale:headscale "$${ENV_TMP}"
 mv -f "$${ENV_TMP}" ${config_dir}/provisioning.env
 set -x
-log "Wrote PROVISIONING_SECRET to ${config_dir}/provisioning.env."
+log "Wrote PROVISIONING_SECRET and PROVISIONING_HOUSEHOLD_KEY to ${config_dir}/provisioning.env."
 
 # -- 9. Tailnet user --------------------------------------------------------
-# The user pre-auth keys are minted for. Must match HEADSCALE_USER in the unit above. The
-# socket appears a moment after headscale starts, hence the retry on the first call.
+# The shared user the pinned provisioning binary mints every key for. Under the policy above
+# its nodes only reach each other, so it is a household of its own until the pin moves to a
+# binary that creates one user per household; it goes away with that bump. Must match
+# HEADSCALE_USER in the unit above. The socket appears a moment after headscale starts,
+# hence the retry on the first call.
 retry headscale users list >/dev/null
 if headscale users list -o json | jq -e '.[]? | select(.name == "quark")' >/dev/null; then
   log "headscale user quark already exists."
