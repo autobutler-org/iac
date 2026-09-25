@@ -7,6 +7,6 @@
     "fix:markdown": "markdownlint-cli2 --fix \"**/*.md\" \"!node_modules\" \"!.claude\""
   },
   "devDependencies": {
-    "markdownlint-cli2": "0.23.2"
+    "markdownlint-cli2": "0.23.3"
   }
 }
