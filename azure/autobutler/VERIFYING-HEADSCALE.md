@@ -149,6 +149,41 @@ docker exec <b1> sh -c 'nc -w 3 <a1-ip> 80 </dev/null && echo open'
 Delete the test nodes and users afterward. headscale will not delete a user that still has nodes, so delete the
 nodes first.
 
+## Joining a device to a household by hand
+
+Until the Quark app carries its own tailnet node (quark#1881), a phone or computer joins with the official
+Tailscale client. The device must land in its Quark's household: under any other headscale user, the layer 5 grant
+never lets it reach the Quark. Never create a user for it. The household already exists, created when the Quark
+enrolled, and `sudo headscale nodes list` shows its name in the Quark's row (`quark-<id>`).
+
+A computer pairs through its Quark, on the home network, with no step on this host:
+
+```bash
+curl -sk -u '<user>:<pass>' -X POST https://<quark>/api/v0/settings/remote-access/devices
+sudo tailscale up --login-server https://quark.ts.autobutler.org --authkey <authKey> --accept-dns=false
+```
+
+A key from a plain `/provision` call does not work here: that is a first enrollment, and it creates a new, empty
+household (layer 4). Use the Quark's pairing route.
+
+An iPhone cannot take an auth key, so an admin approves it here instead:
+
+1. In the Tailscale app, choose **Use a custom coordination server**, enter `https://quark.ts.autobutler.org`, and
+   log in. Safari opens a headscale page with a registration command.
+2. On this host, run that command with the Quark's household as the user:
+
+   ```bash
+   sudo headscale auth register --auth-id <id-from-the-page> --user household-<id>
+   ```
+
+3. In the app, turn off **Use Tailscale DNS**. The config overrides DNS with `1.1.1.1`, which `--accept-dns=false`
+   avoids on a computer.
+4. Reach the Quark at `http://<quark-tailnet-ip>/`. Only `tcp:80` is allowed, so ICMP ping times out by design.
+
+Do not destroy a household user to clean up. That takes its Quark and every paired device off the tailnet. If it
+happens anyway, disable and then enable remote access on the Quark: it keeps its household name and token, and
+the provisioning service recreates the user under the same name. Then pair each device again.
+
 ## Known: UDP 3478 answers nothing
 
 The NSG opens 3478 for STUN, but the headscale config sets `derp.server.enabled: false` and uses Tailscale's
