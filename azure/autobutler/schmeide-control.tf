@@ -5,12 +5,10 @@
 # and restarts the container; the JetStream store on the data disk is untouched. Renovate
 # opens a pull request for each new schmeide tag, and unlike quark's it does not auto-merge.
 #
-# AFTER THE FIRST APPLY, by hand -- terraform never holds a secret value:
-#   1. Give yourself secret access to the vault in the schmeide_control_key_vault_name
-#      output, then set webhook-secret, github-app-private-key (the PEM, with --file) and
-#      runner-tokens. See modules/schmeide-control/key_vault.tf.
-#   2. Set the GitHub App's webhook URL to the schmeide_control_webhook_url output.
-#   3. Point runners at the schmeide_control_nats_url output.
+# AFTER THE FIRST APPLY, by hand -- terraform never holds a secret value: set the three
+# Key Vault secrets, point the GitHub App's webhook at schmeide_control_webhook_url, and
+# point runners at schmeide_control_nats_url. modules/schmeide-control/README.md has the
+# exact commands.
 resource "azurerm_resource_group" "schmeide_control" {
   name     = "schmeide-control"
   location = var.location
