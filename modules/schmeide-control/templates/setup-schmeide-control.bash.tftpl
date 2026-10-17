@@ -1,0 +1,231 @@
+#!/bin/bash
+# schmeide control node -- VM setup script.
+#
+# Runs as root via the Azure CustomScript extension, rendered by templatefile() in main.tf.
+# As in modules/headscale, $${name} is Terraform's and $$${name} renders to a literal $${name}
+# for the shell. Shell variables below use the brace-less $NAME form wherever they can, which
+# Terraform leaves alone.
+#
+# Re-runs safely, and re-runs on every change to this script, schmeide version bumps
+# included: packages install idempotently, units and config are rewritten whole, the data
+# disk is formatted only if it has no filesystem, and the services restart.
+#
+# Carries no secret. schmeide-control.service fetches those from the Key Vault on every
+# start (schmeide-fetch-secrets, below), so they never pass through Terraform, state, CI, or
+# this extension's status message.
+set -euox pipefail
+
+HOSTNAME_FQDN='${hostname}'
+IMAGE='${image}'
+VAULT_URI='${vault_uri}'
+
+# The uid the schmeide image runs as (distroless static:nonroot). Caddy runs as it too, so
+# the certificate and key Caddy writes 0600 are readable by schmeide, and the GitHub App key
+# is written 0600 to it.
+APP_UID=65532
+ROOT=/srv/schmeide
+
+log() { echo "[setup] $*"; }
+
+# -- 1. Packages -----------------------------------------------------------
+log "Installing packages..."
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -qq
+apt-get install -y -qq docker.io curl jq
+systemctl enable --now docker
+
+getent group schmeide >/dev/null || groupadd --system --gid "$APP_UID" schmeide
+id -u schmeide >/dev/null 2>&1 || useradd --system --uid "$APP_UID" --gid "$APP_UID" \
+  --no-create-home --shell /usr/sbin/nologin schmeide
+
+# -- 2. Data disk ----------------------------------------------------------
+# LUN 0, from storage.tf. Ubuntu's Azure images name it under /dev/disk/azure; which of the
+# two paths exists depends on the image's udev rules, so take whichever does.
+DEV=""
+for _ in $(seq 1 30); do
+  for candidate in /dev/disk/azure/data/by-lun/0 /dev/disk/azure/scsi1/lun0; do
+    if [ -e "$candidate" ]; then DEV="$(readlink -f "$candidate")"; break 2; fi
+  done
+  sleep 2
+done
+if [ -z "$DEV" ]; then
+  log "ERROR: no data disk at LUN 0. Check azurerm_virtual_machine_data_disk_attachment.data."
+  exit 1
+fi
+
+# Format only a disk with no filesystem at all. Anything else is the JetStream store from a
+# previous VM, and must be mounted as it is.
+if ! blkid "$DEV" >/dev/null 2>&1; then
+  log "Formatting new data disk $DEV..."
+  mkfs.ext4 -q -L schmeide-data "$DEV"
+fi
+UUID="$(blkid -s UUID -o value "$DEV")"
+mkdir -p "$ROOT"
+# nofail so a missing disk does not drop the VM into emergency mode; RequiresMountsFor in
+# the units then keeps schmeide from writing an empty store onto the OS disk instead.
+grep -q "UUID=$UUID" /etc/fstab || echo "UUID=$UUID $ROOT ext4 defaults,nofail 0 2" >> /etc/fstab
+systemctl daemon-reload
+mountpoint -q "$ROOT" || mount "$ROOT"
+
+# Caddy's storage directory for this hostname's Let's Encrypt certificate. acme_ca in the
+# Caddyfile pins the issuer, so the path cannot move to Caddy's ZeroSSL fallback directory.
+# Created here, before Caddy has issued anything, because schmeide-control.service bind-mounts
+# it: docker would otherwise create a missing source as root, and Caddy could not write there.
+CERT_DIR="$ROOT/caddy/data/caddy/certificates/acme-v02.api.letsencrypt.org-directory/$HOSTNAME_FQDN"
+mkdir -p "$ROOT/data" "$ROOT/caddy/config" "$CERT_DIR"
+chown -R "$APP_UID:$APP_UID" "$ROOT/data" "$ROOT/caddy"
+
+# -- 3. Configuration ------------------------------------------------------
+
+mkdir -p /etc/schmeide
+cat > /etc/schmeide/Caddyfile <<EOF
+{
+	acme_ca https://acme-v02.api.letsencrypt.org/directory
+}
+
+$HOSTNAME_FQDN {
+	reverse_proxy schmeide-control:8080
+}
+EOF
+
+# Non-secret settings. Container paths: /data is the data disk's data/, /run/tls is the
+# certificate directory above (read-only), /run/secrets/github-app.pem is the key file.
+# schmeide re-reads the certificate on every TLS handshake, so a Caddy renewal needs no
+# restart.
+cat > /etc/schmeide/control.env <<EOF
+SCHMEIDE_GITHUB_APP_ID=${github_app_id}
+SCHMEIDE_ALLOWED_ORGS=${allowed_orgs}
+SCHMEIDE_DATA_DIR=/data
+SCHMEIDE_HTTP_ADDR=:8080
+SCHMEIDE_NATS_ADDR=0.0.0.0:4222
+SCHMEIDE_GITHUB_APP_PRIVATE_KEY_FILE=/run/secrets/github-app.pem
+SCHMEIDE_NATS_TLS_CERT_FILE=/run/tls/$HOSTNAME_FQDN.crt
+SCHMEIDE_NATS_TLS_KEY_FILE=/run/tls/$HOSTNAME_FQDN.key
+EOF
+
+# -- 4. Secret fetch -------------------------------------------------------
+# Runs as ExecStartPre of schmeide-control.service, so every start -- boot, crash restart,
+# version bump -- reads the current values. It writes only to /run, a tmpfs: the secrets are
+# never on a disk. The managed identity's token comes from IMDS, and goes to curl in a 0600
+# header file rather than argv, where any local user could read it from /proc.
+cat > /usr/local/bin/schmeide-fetch-secrets <<EOF
+#!/bin/bash
+set -euo pipefail
+VAULT_URI='$VAULT_URI'
+APP_UID=$APP_UID
+EOF
+cat >> /usr/local/bin/schmeide-fetch-secrets <<'EOF'
+umask 077
+mkdir -p /run/schmeide
+AUTH=/run/schmeide/.auth
+trap 'rm -f "$AUTH"' EXIT
+
+token="$(curl -sf -H Metadata:true \
+  'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https%3A%2F%2Fvault.azure.net' \
+  | jq -r .access_token)" || {
+  echo "schmeide-fetch-secrets: no managed identity token from IMDS. Check the VM's system-assigned identity." >&2
+  exit 1
+}
+printf 'Authorization: Bearer %s\n' "$token" > "$AUTH"
+unset token
+
+get() {
+  local value
+  value="$(curl -sf -H "@$AUTH" "$${VAULT_URI}secrets/$1?api-version=7.4" | jq -r '.value // empty')" || true
+  if [ -z "$value" ]; then
+    echo "schmeide-fetch-secrets: secret '$1' is missing or empty in $VAULT_URI." >&2
+    echo "  Set it: az keyvault secret set --vault-name <vault> --name $1 --value ... (or --file for the PEM)" >&2
+    exit 1
+  fi
+  printf '%s\n' "$value"
+}
+
+# Assigned first, not substituted into printf's arguments: a failed get inside an argument
+# would not stop the script, and would write an empty secret.
+WEBHOOK_SECRET="$(get webhook-secret)"
+RUNNER_TOKENS="$(get runner-tokens)"
+ENV_TMP="$(mktemp /run/schmeide/.secrets.env.XXXXXX)"
+printf 'SCHMEIDE_WEBHOOK_SECRET=%s\nSCHMEIDE_RUNNER_TOKENS=%s\n' "$WEBHOOK_SECRET" "$RUNNER_TOKENS" > "$ENV_TMP"
+unset WEBHOOK_SECRET RUNNER_TOKENS
+mv -f "$ENV_TMP" /run/schmeide/secrets.env
+
+# schmeide refuses to start if the key has any group or other bits, so 0600, owned by the
+# container's uid. mktemp already creates it 0600; chmod says so explicitly.
+PEM_TMP="$(mktemp /run/schmeide/.github-app.pem.XXXXXX)"
+get github-app-private-key > "$PEM_TMP"
+chown "$APP_UID:$APP_UID" "$PEM_TMP"
+chmod 0600 "$PEM_TMP"
+mv -f "$PEM_TMP" /run/schmeide/github-app.pem
+
+EOF
+chmod 0755 /usr/local/bin/schmeide-fetch-secrets
+
+# -- 5. Units --------------------------------------------------------------
+# Two containers on one docker network, so Caddy reaches the webhook listener by name and
+# 8080 is never published on the host. Caddy publishes 80 and 443; schmeide publishes 4222.
+cat > /etc/systemd/system/schmeide-caddy.service <<EOF
+[Unit]
+Description=Caddy for the schmeide webhook, and the certificate NATS serves
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+RequiresMountsFor=$ROOT
+
+[Service]
+ExecStartPre=-/usr/bin/docker network create schmeide
+ExecStartPre=-/usr/bin/docker rm -f schmeide-caddy
+ExecStart=/usr/bin/docker run --rm --name schmeide-caddy --network schmeide \\
+  --user $APP_UID:$APP_UID -p 80:80 -p 443:443 \\
+  -v /etc/schmeide/Caddyfile:/etc/caddy/Caddyfile:ro \\
+  -v $ROOT/caddy/data:/data -v $ROOT/caddy/config:/config \\
+  public.ecr.aws/docker/library/caddy:2
+ExecStop=/usr/bin/docker stop schmeide-caddy
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Until Caddy has issued the certificate, schmeide cannot serve NATS TLS and exits;
+# Restart=always brings it back every 10 seconds until the files exist.
+cat > /etc/systemd/system/schmeide-control.service <<EOF
+[Unit]
+Description=schmeide control node
+After=docker.service network-online.target schmeide-caddy.service
+Requires=docker.service
+Wants=network-online.target
+RequiresMountsFor=$ROOT
+
+[Service]
+ExecStartPre=/usr/local/bin/schmeide-fetch-secrets
+ExecStartPre=-/usr/bin/docker network create schmeide
+ExecStartPre=-/usr/bin/docker rm -f schmeide-control
+ExecStart=/usr/bin/docker run --rm --name schmeide-control --network schmeide \\
+  --user $APP_UID:$APP_UID -p 4222:4222 \\
+  --env-file /etc/schmeide/control.env --env-file /run/schmeide/secrets.env \\
+  -v $ROOT/data:/data \\
+  -v $CERT_DIR:/run/tls:ro \\
+  -v /run/schmeide/github-app.pem:/run/secrets/github-app.pem:ro \\
+  $IMAGE control
+ExecStop=/usr/bin/docker stop schmeide-control
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# -- 6. Start --------------------------------------------------------------
+# Pull before the restart so a version bump's download is not part of the outage. Non-fatal:
+# a tag that is not published yet should not fail the extension, and the unit's own pull
+# retries every 10 seconds until it is.
+docker pull "$IMAGE" || log "WARNING: could not pull $IMAGE yet; schmeide-control.service keeps retrying."
+
+systemctl daemon-reload
+systemctl enable schmeide-caddy.service schmeide-control.service
+systemctl restart schmeide-caddy.service schmeide-control.service
+
+log "Setup complete for $HOSTNAME_FQDN."
+log "Until the Key Vault secrets are set, schmeide-control.service fails and retries:"
+log "  journalctl -u schmeide-control"

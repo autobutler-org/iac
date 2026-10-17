@@ -52,3 +52,22 @@ variable "cloud_dns_zone" {
   type        = string
   default     = "cloud.autobutler.org"
 }
+
+variable "schmeide_control_version" {
+  description = "Tag of ghcr.io/autobutler-org/schmeide the control node runs. Renovate bumps it; see schmeide-control.tf."
+  type        = string
+  # renovate: datasource=docker depName=ghcr.io/autobutler-org/schmeide
+  default = "0.0.1"
+}
+
+variable "schmeide_github_app_id" {
+  description = "App ID of the schmeide GitHub App. Not a secret: it is in every token the App mints."
+  type        = string
+  default     = "5304111"
+}
+
+variable "schmeide_control_ssh_public_key" {
+  description = "SSH public key authorized on the schmeide control VM. Public half only; the same key as the headscale host."
+  type        = string
+  default     = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBFF2mZiRit7xR865+/Relyro1JBD1TzGT48XeC4XGSg autobutler.org@gmail.com"
+}

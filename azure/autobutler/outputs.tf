@@ -62,3 +62,18 @@ output "cloud_dns_zone_nameservers" {
   description = "NS records to create for the cloud label at Porkbun. One-time step; until they exist nothing under the zone resolves and the quark instance cannot get a certificate."
   value       = azurerm_dns_zone.cloud.name_servers
 }
+
+output "schmeide_control_webhook_url" {
+  description = "Webhook URL to set on the schmeide GitHub App."
+  value       = module.schmeide_control.webhook_url
+}
+
+output "schmeide_control_nats_url" {
+  description = "NATS URL schmeide runners connect to."
+  value       = module.schmeide_control.nats_url
+}
+
+output "schmeide_control_key_vault_name" {
+  description = "Key Vault whose webhook-secret, github-app-private-key and runner-tokens secrets a person sets by hand after the first apply."
+  value       = module.schmeide_control.key_vault_name
+}

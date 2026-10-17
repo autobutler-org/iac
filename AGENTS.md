@@ -159,9 +159,10 @@ Change it there, not here. Renovate's runs, logs and job status are on the
   `github-actions` (the action versions the workflows pin), `terraform` (the `azurerm`
   provider constraint) and `npm` (`markdownlint-cli2`, the one devDependency). The fourth
   entry is the custom manager below.
-- A regex manager that reads the `# renovate:` comment above `quark_instance_version` in
-  `azure/autobutler/variables.tf` and tracks `ghcr.io/autobutler-org/quark` tags. Keep
-  that comment directly above the `default` line, or Renovate stops seeing the version.
+- A regex manager that reads every `# renovate:` comment in `azure/autobutler/variables.tf`:
+  the one above `quark_instance_version` tracks `ghcr.io/autobutler-org/quark` tags, the
+  one above `schmeide_control_version` tracks `ghcr.io/autobutler-org/schmeide`. Keep each
+  comment directly above its `default` line, or Renovate stops seeing the version.
 - A rule that auto-merges quark image bumps as soon as a tag is published, outside the
   daily 4am window. The merge to `main` runs `apply.yml`, so a new quark release deploys
   without anyone touching it. This needs "Allow auto-merge" on in the repo settings, and
