@@ -5,7 +5,7 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "The quark image tag the public quark instance runs.",
+      "description": "Image tags held in Terraform variables: the quark instance and the schmeide control node.",
       "managerFilePatterns": ["/^azure/autobutler/variables\\.tf$/"],
       "matchStrings": [
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+default\\s*=\\s*\"(?<currentValue>[^\"]+)\""
