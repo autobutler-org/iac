@@ -57,7 +57,7 @@ variable "schmeide_control_version" {
   description = "Tag of ghcr.io/autobutler-org/schmeide the control node runs. Renovate bumps it; see schmeide-control.tf."
   type        = string
   # renovate: datasource=docker depName=ghcr.io/autobutler-org/schmeide
-  default = "0.0.1"
+  default = "0.0.2"
 }
 
 variable "schmeide_github_app_id" {
