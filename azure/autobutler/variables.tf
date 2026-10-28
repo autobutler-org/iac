@@ -44,7 +44,7 @@ variable "quark_instance_version" {
   description = "Tag of ghcr.io/autobutler-org/quark the public quark instance runs, bare semver. Renovate bumps it; see quark-instance.tf."
   type        = string
   # renovate: datasource=docker depName=ghcr.io/autobutler-org/quark
-  default = "0.56.2"
+  default = "0.56.3"
 }
 
 variable "cloud_dns_zone" {
