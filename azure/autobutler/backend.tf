@@ -33,5 +33,11 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "~> 5.0"
     }
+    # The CI cluster looks up the github-actions-iac service principal. A floor would
+    # do in a shared module; the root is where the pin lives. 3.x is the current major.
+    azuread = {
+      source  = "hashicorp/azuread"
+      version = "~> 3.0"
+    }
   }
 }
