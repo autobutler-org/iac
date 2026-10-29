@@ -48,8 +48,8 @@ until someone publishes it. This repo is not where the chart is developed.
 the `ci_runner_identity_client_id` output after the first apply. Do not invent a GUID,
 and do not put a private key or a PAT in that file.
 
-## Argo is not on a public IP
+## Argo
 
-The Argo server Service is ClusterIP. The cluster has no inbound listener, so there is
-no DNS record and no LoadBalancer to add later "just in case". Runners dial out. People
-reach Argo with `kubectl port-forward`, if they need to.
+The Argo server Service is a LoadBalancer on the static address from the cluster
+module. `argo.errand.cloud.autobutler.org` is the A record for that address. Runners
+dial out. The management UI at `errand.cloud.autobutler.org` is not this Service.

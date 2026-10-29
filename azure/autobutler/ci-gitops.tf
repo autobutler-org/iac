@@ -77,9 +77,11 @@ resource "helm_release" "external_secrets" {
   ]
 }
 
-# ClusterIP on purpose. Nothing on this cluster accepts inbound connections, and Argo is
-# not an exception. No LoadBalancer, no public IP, no DNS record. The admin password is
-# left unset so the chart generates one. It is not copied into git or into an output.
+# LoadBalancer on the address reserved in the cluster module. The A record
+# argo.errand.cloud.autobutler.org already aliases that IP. The annotations name the
+# address in the cluster resource group, which is not the node resource group AKS owns.
+# The admin password is left unset so the chart generates one. It is not copied into
+# git or into an output.
 resource "helm_release" "argo_cd" {
   name             = "argo-cd"
   repository       = "https://argoproj.github.io/argo-helm"
@@ -95,7 +97,11 @@ resource "helm_release" "argo_cd" {
     yamlencode({
       server = {
         service = {
-          type = "ClusterIP"
+          type = "LoadBalancer"
+          annotations = {
+            "service.beta.kubernetes.io/azure-load-balancer-resource-group" = module.ci_cluster.resource_group_name
+            "service.beta.kubernetes.io/azure-pip-name"                     = module.ci_cluster.argocd_public_ip_name
+          }
         }
       }
       # The chart runs each extraObject through Helm tpl. The ESO template delimiters
