@@ -1,0 +1,35 @@
+# The chart tag 0.1.0 is not published yet. This Application stays unsynced until it is.
+# This repo is not the chart source.
+#
+# OCI source shape from the Argo CD 3.5 docs: repoURL is the registry path without the
+# chart name, chart is ci-runners, and the oci:// prefix is not included. The second
+# source is this repo, ref "values", so the chart reads
+# $values/gitops/autobutler/ci-runners/values.yaml.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ci-runners
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  project: default
+  sources:
+    - repoURL: ghcr.io/autobutler-org
+      chart: ci-runners
+      targetRevision: 0.1.0
+      helm:
+        valueFiles:
+          - $values/gitops/autobutler/ci-runners/values.yaml
+    - repoURL: https://github.com/autobutler-org/iac.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ci-runners
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

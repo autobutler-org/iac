@@ -2,8 +2,8 @@
 
 AutoButler's own CI cluster. Terraform owns the AKS cluster, the container registry, the
 blob cache, two user-assigned identities, and a Key Vault. The runner Helm chart is not
-in this repo. Other people install that chart without this repo's state, and Argo CD is
-what applies it. This module does not install Argo.
+in this repo. Other people install that chart without this repo's state. This module
+does not install the chart. Argo CD, installed from the root module, does.
 
 The cluster is the Free tier. The research cost table used AKS Standard for a ten-node
 always-on sketch. This install does not need that uptime SLA. One `Standard_D2s_v6`
@@ -23,6 +23,14 @@ GitHub-hosted Actions runners have no stable egress and the Helm provider has to
 the API from those runners. Entra is the lock.
 
 Apply happens from `main` via CI. Do not apply this module from a laptop.
+
+## GitOps
+
+Terraform installs Argo CD and External Secrets once, in
+`azure/autobutler/ci-gitops.tf`. Argo watches `gitops/autobutler/apps` on main and is the
+thing that applies the runner chart. `gitops/README.md` covers that split, the two Key
+Vault secrets a person sets by hand, and why the repository credential is not a file in
+the watched directory.
 
 ## Outputs
 
