@@ -72,8 +72,10 @@ resource "azurerm_kubernetes_cluster" "this" {
   # land here. only_critical_addons_enabled stays off, because turning it on would leave
   # Argo and External Secrets with nowhere to schedule.
   default_node_pool {
-    name            = "system"
-    vm_size         = "Standard_D2s_v5"
+    name = "system"
+    # DSv5 quota in this subscription cannot be raised. Dsv6 already has room for
+    # this one 2-vCPU node.
+    vm_size         = "Standard_D2s_v6"
     node_count      = 1
     os_disk_size_gb = 32
     os_disk_type    = "Managed"
@@ -93,37 +95,68 @@ resource "azurerm_kubernetes_cluster" "this" {
   }
 }
 
-# Scale to zero. min_count 0 with autoscaling, and no node_count: the provider treats an
-# omitted count as 0 and uses min_count as the initial count, so the pool is created
-# empty. Standard_D4ds_v6 is 4 vCPU and 16 GiB, which is enough for a normal AutoButler
-# job without keeping a D8 warm.
+# Two runner pools, one per architecture. Each machine is 4 real cores and 16 GiB.
+# Ddsv6 vCPUs are hyperthreads, so the x64 pool is Fasv6 (SMT off) and the Arm pool is
+# Cobalt, one core per vCPU.
 #
-# Ephemeral OS on the only local disk. This SKU has no SCSI resource disk
-# (MaxResourceVolumeMB is 0) and one 220 GiB NVMe (NvmeDiskSizeInMiB 225280), and
-# SupportedEphemeralOSDiskPlacements is NvmeDisk. 128 GiB fits. The ephemeral OS consumes
-# that NVMe, which is acceptable because scale-to-zero throws the warm cache away.
+# The Arm pool starts at 3 nodes and the autoscaler may add nodes up to 100, which is
+# the concurrency target (100 jobs, 400 vCPUs). The x64 pool starts empty and uses the
+# same ceiling, for the jobs that have to build on x64. "Starts at 3" is the Arm floor,
+# not three of each: three warm x64 nodes would sit idle behind the AppImage legs.
 #
-# The taint keeps system pods on the system pool. Without it, a scale-up would be a
-# legal home for CoreDNS and the pool could not return to zero.
+# No node_count. With autoscaling the provider uses min_count as the initial count.
+#
+# D4pds_v6 has one NVMe and no SCSI resource disk, same shape as the other v6 "d" sizes,
+# so the Arm OS disk is ephemeral and consumes that NVMe. F4as_v6 has no local disk, so
+# its OS disk is managed.
+#
+# The taint keeps system pods on the system pool. A runner pod selects
+# kubernetes.io/arch. Both pools carry the same taint, so an unselected pod is
+# unschedulable rather than landing on the wrong architecture.
 #
 # Trusted Launch, vTPM, and secure boot stay off. A later guest-kernel mode for
 # untrusted jobs requires Trusted Launch to have been left off, and azurerm has no
-# argument to set it on this pool, so the default of off is load-bearing. Do not add a
+# argument to set it on these pools, so the default of off is load-bearing. Do not add a
 # security profile that turns it on. Privileged DinD is allowed while every job is
 # AutoButler's. An Azure Policy add-on would block that, so Azure Policy, Container
 # Insights, and the OMS agent are not enabled on the cluster either.
-resource "azurerm_kubernetes_cluster_node_pool" "runners" {
-  name                  = "runners"
+resource "azurerm_kubernetes_cluster_node_pool" "arm" {
+  name                  = "arm"
   kubernetes_cluster_id = azurerm_kubernetes_cluster.this.id
-  vm_size               = "Standard_D4ds_v6"
+  vm_size               = "Standard_D4pds_v6"
+  mode                  = "User"
+  vnet_subnet_id        = azurerm_subnet.nodes.id
+
+  auto_scaling_enabled = true
+  min_count            = 3
+  max_count            = 100
+
+  os_disk_type    = "Ephemeral"
+  os_disk_size_gb = 128
+
+  node_labels = {
+    "ci.autobutler.org/runner" = "true"
+  }
+
+  node_taints = [
+    "ci.autobutler.org/runner=true:NoSchedule",
+  ]
+
+  tags = var.tags
+}
+
+resource "azurerm_kubernetes_cluster_node_pool" "x64" {
+  name                  = "x64"
+  kubernetes_cluster_id = azurerm_kubernetes_cluster.this.id
+  vm_size               = "Standard_F4as_v6"
   mode                  = "User"
   vnet_subnet_id        = azurerm_subnet.nodes.id
 
   auto_scaling_enabled = true
   min_count            = 0
-  max_count            = 3
+  max_count            = 100
 
-  os_disk_type    = "Ephemeral"
+  os_disk_type    = "Managed"
   os_disk_size_gb = 128
 
   node_labels = {

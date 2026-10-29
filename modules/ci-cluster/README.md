@@ -6,10 +6,15 @@ in this repo. Other people install that chart without this repo's state, and Arg
 what applies it. This module does not install Argo.
 
 The cluster is the Free tier. The research cost table used AKS Standard for a ten-node
-always-on sketch. The first install scales the runner pool to zero, so it does not need
-the uptime SLA. One `Standard_D2s_v5` system node stays up. It does not run jobs. The
-runner pool is tainted `ci.autobutler.org/runner=true:NoSchedule` and scales from 0 to 3
-`Standard_D4ds_v6` nodes.
+always-on sketch. This install does not need that uptime SLA. One `Standard_D2s_v6`
+system node stays up. It does not run jobs. DSv5 was the first choice for that node and
+the quota for it cannot be raised in this subscription.
+
+Runner nodes are 4 cores and 16 GiB. The Arm pool (`Standard_D4pds_v6`) starts at 3
+nodes and the autoscaler may grow it to 100. The x64 pool (`Standard_F4as_v6`) starts
+at 0 and may grow to 100. 100 is the concurrency target, not a count we provision now.
+Both pools are tainted `ci.autobutler.org/runner=true:NoSchedule`. A runner pod selects
+`kubernetes.io/arch`.
 
 Local accounts are off. The API server is public and has no authorized IP ranges, because
 GitHub-hosted Actions runners have no stable egress and the Helm provider has to reach

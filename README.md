@@ -162,8 +162,9 @@ Argo CD owns the runner chart, and the chart is not in this repo. Other people i
 that chart without this repo's state.
 
 The cluster is the Free tier. The research cost table used AKS Standard for a ten-node
-always-on sketch. The first install scales the runner pool to zero, so it does not need
-the uptime SLA. One `Standard_D2s_v5` system node stays up, and it does not run jobs.
+always-on sketch. This install does not need that uptime SLA. One `Standard_D2s_v6`
+system node stays up, and it does not run jobs. The Arm runner pool starts at 3 nodes
+and can grow to 100. The x64 runner pool starts empty and can grow to the same ceiling.
 
 Nothing on the cluster accepts inbound connections, so there is no DNS record.
 `cloud.autobutler.org` is already delegated and is where a name would go if we later
