@@ -107,10 +107,10 @@ values is `runner_identity_client_id`. Fill it in after the first apply. Do not 
 
 ## DNS
 
-Nothing on this cluster accepts inbound connections. Runners dial out to GitHub. The
-registry answers on `autobutlerci.azurecr.io` and the cache on
-`stautobutlercicache.blob.core.windows.net`, which are Azure hostnames this module does
-not have to publish. `cloud.autobutler.org` is already delegated and is where a name
-would go if we later publish something from the cluster. This module does not create a
-record, a dangling A record, or a public IP "for later". The cluster's `dns_prefix` is
+`argo.errand.cloud.autobutler.org` is an alias A record for a static public IP in the
+cluster resource group. The Argo Service attaches that address by name. The management
+UI name, `errand.cloud.autobutler.org`, is not created here. That UI does not exist yet.
+
+Runners still dial out to GitHub. The registry answers on `autobutlerci.azurecr.io` and
+the cache on `stautobutlercicache.blob.core.windows.net`. The cluster's `dns_prefix` is
 only the Azure-managed API hostname.

@@ -48,6 +48,16 @@ output "runner_identity_principal_id" {
   value       = azurerm_user_assigned_identity.runner.principal_id
 }
 
+output "argocd_public_ip_name" {
+  description = "Name of the static public IP reserved for Argo CD. The Argo Service attaches this address by name. It lives in resource_group_name, not the node resource group."
+  value       = azurerm_public_ip.argocd.name
+}
+
+output "argocd_fqdn" {
+  description = "Public hostname of the Argo CD UI. The A record aliases the reserved public IP."
+  value       = "${azurerm_dns_a_record.argocd.name}.${azurerm_dns_a_record.argocd.zone_name}"
+}
+
 output "control_plane_identity_principal_id" {
   description = "Object id of the control-plane identity. It has Network Contributor on the cluster VNet, which the cluster create waits for."
   value       = azurerm_user_assigned_identity.control.principal_id

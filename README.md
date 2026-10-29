@@ -166,10 +166,9 @@ always-on sketch. This install does not need that uptime SLA. One `Standard_D2s_
 system node stays up, and it does not run jobs. The Arm runner pool starts at 2 nodes
 and can grow to 100. The x64 runner pool starts empty and can grow to the same ceiling.
 
-Nothing on the cluster accepts inbound connections, so there is no DNS record.
-`cloud.autobutler.org` is already delegated and is where a name would go if we later
-publish something. Runners dial out to GitHub. The registry and the cache have their own
-Azure hostnames.
+`argo.errand.cloud.autobutler.org` is an alias A record for a static public IP reserved
+in the cluster resource group. The Argo Service attaches that address. Runners still
+dial out to GitHub. The registry and the cache have their own Azure hostnames.
 
 Before the first apply, someone who can assign roles has to re-run
 `./bootstrap/github-oidc.bash create`. The GitHub Actions identity is a Contributor, and

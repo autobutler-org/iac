@@ -15,8 +15,7 @@ data "azuread_service_principal" "github_actions" {
 # to an operator's home IP.
 #
 # dns_prefix is the Azure-managed API hostname (<prefix>.<region>.azmk8s.io). It is not
-# a record in cloud.autobutler.org. Nothing on this cluster accepts inbound connections,
-# so this module creates no DNS record and no public IP for one.
+# a record in cloud.autobutler.org. The one public name is argo.errand, in dns.tf.
 resource "azurerm_kubernetes_cluster" "this" {
   name                = local.cluster_name
   resource_group_name = var.resource_group_name
@@ -88,7 +87,10 @@ resource "azurerm_kubernetes_cluster" "this" {
   # Azure CLI would create the Network Contributor assignment itself. The identity id
   # referenced above is not a dependency on that assignment, so this depends_on is
   # load-bearing.
-  depends_on = [azurerm_role_assignment.control_network]
+  depends_on = [
+    azurerm_role_assignment.control_network,
+    azurerm_role_assignment.control_argocd_ip,
+  ]
 
   lifecycle {
     prevent_destroy = true

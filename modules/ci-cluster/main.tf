@@ -30,16 +30,18 @@ locals {
   # Names confirmed free on 2026-10-29. They are fixed because the federated-credential
   # subject, the cache URL, and the vault name are contracts with things that do not
   # live in this module.
-  cluster_name          = "autobutler-ci"
-  dns_prefix            = "autobutler-ci"
-  registry_name         = "autobutlerci"
-  storage_account_name  = "stautobutlercicache"
-  cache_container_name  = "cache"
-  key_vault_name        = "kv-autobutler-ci"
-  control_identity_name = "id-autobutler-ci-control"
-  runner_identity_name  = "id-autobutler-ci-runner"
-  vnet_name             = "autobutler-ci-vnet"
-  subnet_name           = "nodes"
+  cluster_name           = "autobutler-ci"
+  dns_prefix             = "autobutler-ci"
+  registry_name          = "autobutlerci"
+  storage_account_name   = "stautobutlercicache"
+  cache_container_name   = "cache"
+  key_vault_name         = "kv-autobutler-ci"
+  control_identity_name  = "id-autobutler-ci-control"
+  runner_identity_name   = "id-autobutler-ci-runner"
+  vnet_name              = "autobutler-ci-vnet"
+  subnet_name            = "nodes"
+  argocd_public_ip_name  = "autobutler-ci-argocd-pip"
+  argocd_dns_record_name = "argo.errand"
 
   # Latest 1.36 patch in eastus on 2026-10-29, from `az aks get-versions -l eastus`.
   # 1.36 is Azure's default minor there. 1.37 is published and is not what this cluster

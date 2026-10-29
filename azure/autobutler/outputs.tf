@@ -128,6 +128,11 @@ output "ci_runner_identity_principal_id" {
   value       = module.ci_cluster.runner_identity_principal_id
 }
 
+output "ci_argocd_fqdn" {
+  description = "Public hostname of the Argo CD UI, argo.errand.cloud.autobutler.org. The A record aliases the reserved public IP."
+  value       = module.ci_cluster.argocd_fqdn
+}
+
 output "ci_control_plane_identity_principal_id" {
   description = "Object id of the CI control-plane identity. It has Network Contributor on the cluster VNet, which the cluster create waits for."
   value       = module.ci_cluster.control_plane_identity_principal_id
