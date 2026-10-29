@@ -1,7 +1,8 @@
 # 10.8.0.0/16, not 10.0.0.0/16. schmeide and headscale each use 10.0.0.0/16 in their own
 # VNets. Those VNets are not peered today, but reusing the range would make a later
 # peering impossible. The node subnet is a /22: Azure CNI overlay does not take a pod
-# address from it, so this only has to hold the system node and up to three runners.
+# address from it, so a node takes one address. A /22 holds the system node and both
+# runner pools at their ceiling of 100.
 resource "azurerm_virtual_network" "this" {
   name                = local.vnet_name
   resource_group_name = var.resource_group_name

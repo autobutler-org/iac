@@ -163,7 +163,7 @@ that chart without this repo's state.
 
 The cluster is the Free tier. The research cost table used AKS Standard for a ten-node
 always-on sketch. This install does not need that uptime SLA. One `Standard_D2s_v6`
-system node stays up, and it does not run jobs. The Arm runner pool starts at 3 nodes
+system node stays up, and it does not run jobs. The Arm runner pool starts at 2 nodes
 and can grow to 100. The x64 runner pool starts empty and can grow to the same ceiling.
 
 Nothing on the cluster accepts inbound connections, so there is no DNS record.

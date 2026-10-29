@@ -99,10 +99,11 @@ resource "azurerm_kubernetes_cluster" "this" {
 # Ddsv6 vCPUs are hyperthreads, so the x64 pool is Fasv6 (SMT off) and the Arm pool is
 # Cobalt, one core per vCPU.
 #
-# The Arm pool starts at 3 nodes and the autoscaler may add nodes up to 100, which is
-# the concurrency target (100 jobs, 400 vCPUs). The x64 pool starts empty and uses the
-# same ceiling, for the jobs that have to build on x64. "Starts at 3" is the Arm floor,
-# not three of each: three warm x64 nodes would sit idle behind the AppImage legs.
+# The Arm pool starts at 2 nodes and the autoscaler may add nodes up to 100, which is
+# the concurrency target (100 jobs, 400 vCPUs). Two nodes are 8 vCPUs. The Dpdsv6 family
+# quota is 10, so a third node (12 vCPUs) cannot be created until that quota is raised.
+# The x64 pool starts empty and uses the same ceiling, for the jobs that have to build
+# on x64. Two is the Arm floor, not two of each.
 #
 # No node_count. With autoscaling the provider uses min_count as the initial count.
 #
@@ -128,7 +129,7 @@ resource "azurerm_kubernetes_cluster_node_pool" "arm" {
   vnet_subnet_id        = azurerm_subnet.nodes.id
 
   auto_scaling_enabled = true
-  min_count            = 3
+  min_count            = 2
   max_count            = 100
 
   os_disk_type    = "Ephemeral"

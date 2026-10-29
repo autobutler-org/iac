@@ -10,9 +10,11 @@ always-on sketch. This install does not need that uptime SLA. One `Standard_D2s_
 system node stays up. It does not run jobs. DSv5 was the first choice for that node and
 the quota for it cannot be raised in this subscription.
 
-Runner nodes are 4 cores and 16 GiB. The Arm pool (`Standard_D4pds_v6`) starts at 3
-nodes and the autoscaler may grow it to 100. The x64 pool (`Standard_F4as_v6`) starts
-at 0 and may grow to 100. 100 is the concurrency target, not a count we provision now.
+Runner nodes are 4 cores and 16 GiB. The Arm pool (`Standard_D4pds_v6`) starts at 2
+nodes and the autoscaler may grow it to 100. Two nodes are 8 vCPUs, which fits the
+current Dpdsv6 quota of 10. A third node does not. The x64 pool (`Standard_F4as_v6`)
+starts at 0 and may grow to 100. 100 is the concurrency target, not a count we
+provision now.
 Both pools are tainted `ci.autobutler.org/runner=true:NoSchedule`. A runner pod selects
 `kubernetes.io/arch`.
 
