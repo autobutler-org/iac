@@ -3,6 +3,12 @@ githubConfigSecret: github-app-private-key
 runnerScaleSetName: errand-x64
 # Same group as the Arm set. Both labels live here, not in Default.
 runnerGroup: errand
+# Argo renders with helm template, and that lookup cannot see the controller
+# Deployment even when the label is present. Set both fields. The name helper
+# and the namespace helper each call lookup when their own field is empty.
+controllerServiceAccount:
+  name: errand-controller-gha-rs-controller
+  namespace: ci-runners
 minRunners: 0
 maxRunners: 100
 containerMode:

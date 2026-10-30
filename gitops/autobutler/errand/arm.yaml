@@ -4,6 +4,12 @@ runnerScaleSetName: errand
 # Organization runner group. Create it before this scale set syncs. It is not
 # the Default group, so a job must name the group and the label.
 runnerGroup: errand
+# Argo renders with helm template, and that lookup cannot see the controller
+# Deployment even when the label is present. Set both fields. The name helper
+# and the namespace helper each call lookup when their own field is empty.
+controllerServiceAccount:
+  name: errand-controller-gha-rs-controller
+  namespace: ci-runners
 minRunners: 0
 maxRunners: 100
 containerMode:
