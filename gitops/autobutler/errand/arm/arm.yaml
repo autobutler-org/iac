@@ -18,6 +18,11 @@ containerMode:
 # The listener is one pod for the scale set. It belongs on the system node.
 listenerTemplate:
   spec:
+    # The container name must be listener. The controller merges this into
+    # the default listener container. The CRD still requires a container.
+    containers:
+      - name: listener
+        image: ghcr.io/actions/gha-runner-scale-set-controller:0.15.1
     tolerations:
       - key: CriticalAddonsOnly
         operator: Equal
