@@ -99,7 +99,7 @@ output "ci_oidc_issuer_url" {
 }
 
 output "ci_acr_login_server" {
-  description = "ACR login server the runner chart pulls from. The kubelet identity can pull; nothing here grants push."
+  description = "ACR login server. The kubelet identity can pull. The image identity can push."
   value       = module.ci_cluster.acr_login_server
 }
 
@@ -116,6 +116,11 @@ output "ci_key_vault_name" {
 output "ci_key_vault_id" {
   description = "ARM id of the CI Key Vault. A later access policy attaches here. This output is not a secret."
   value       = module.ci_cluster.key_vault_id
+}
+
+output "ci_image_identity_client_id" {
+  description = "Client id of the identity Quark's CI image workflow uses to push to ACR. It is not a secret. Set it as CI_IMAGE_AZURE_CLIENT_ID on autobutler-org/quark after apply."
+  value       = module.ci_cluster.image_identity_client_id
 }
 
 output "ci_runner_identity_client_id" {

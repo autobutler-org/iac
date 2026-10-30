@@ -19,7 +19,7 @@ output "oidc_issuer_url" {
 }
 
 output "acr_login_server" {
-  description = "ACR login server the runner chart pulls from. The kubelet identity can pull; this module grants no push."
+  description = "ACR login server. The kubelet identity can pull. The image identity can push."
   value       = azurerm_container_registry.this.login_server
 }
 
@@ -41,6 +41,11 @@ output "key_vault_id" {
 output "runner_identity_client_id" {
   description = "Client id of the runner workload identity. The runner chart's Helm values take this. It is not a secret."
   value       = azurerm_user_assigned_identity.runner.client_id
+}
+
+output "image_identity_client_id" {
+  description = "Client id of the identity Quark's CI image workflow uses to push. It is not a secret. Set it as CI_IMAGE_AZURE_CLIENT_ID on autobutler-org/quark."
+  value       = azurerm_user_assigned_identity.image.client_id
 }
 
 output "runner_identity_principal_id" {

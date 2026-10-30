@@ -33,3 +33,14 @@ resource "azurerm_role_assignment" "kubelet_acr" {
   principal_type                   = "ServicePrincipal"
   skip_service_principal_aad_check = true
 }
+
+# Quark's CI image workflow pushes autobutlerci.azurecr.io/ci. Writer is the ABAC
+# role that can push. The bootstrap condition has to list this role or CI cannot
+# create the assignment. The image identity is new, so skip the AAD replication check.
+resource "azurerm_role_assignment" "image_acr_push" {
+  scope                            = azurerm_container_registry.this.id
+  role_definition_name             = "Container Registry Repository Writer"
+  principal_id                     = azurerm_user_assigned_identity.image.principal_id
+  principal_type                   = "ServicePrincipal"
+  skip_service_principal_aad_check = true
+}

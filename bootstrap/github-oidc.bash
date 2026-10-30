@@ -11,7 +11,7 @@
 # Safe to re-run: every step checks for what it would create first. create also assigns
 # Role Based Access Control Administrator on the subscription, with an ABAC condition.
 # Contributor cannot write role assignments, and the CI cluster needs several. The
-# condition allows write and delete only for the five built-in roles that cluster's
+# condition allows write and delete only for the six built-in roles that cluster's
 # terraform uses. An assignment with an empty condition is not this grant. It would be
 # an unconstrained RBAC administrator, and doctor reports that as missing.
 
@@ -31,10 +31,13 @@ readonly AUDIENCE="api://AzureADTokenExchange"
 #   az role definition list --name "Role Based Access Control Administrator" \
 #     --query "[0].name" -o tsv
 #   f58310d9-a9f6-439a-9e8d-f62e7b41a168
-# The five ids in rbac_admin_condition were checked the same way, against the names
-# Network Contributor, Container Registry Repository Reader, Storage Blob Data
-# Contributor, Azure Kubernetes Service Cluster User Role, and Azure Kubernetes Service
-# RBAC Cluster Admin. Azure returned the documented ids. None differed.
+# The six ids in rbac_admin_condition were checked the same way, against the names
+# Network Contributor, Container Registry Repository Reader, Container Registry
+# Repository Writer, Storage Blob Data Contributor, Azure Kubernetes Service Cluster
+# User Role, and Azure Kubernetes Service RBAC Cluster Admin. Azure returned the
+# documented ids. None differed. Writer was checked 2026-10-30:
+#   az role definition list --name "Container Registry Repository Writer" --query "[0].name" -o tsv
+#   2a1e307c-b015-4ebd-883e-5b7698a07328
 readonly RBAC_ADMIN_ROLE="Role Based Access Control Administrator"
 readonly RBAC_ADMIN_CONDITION_VERSION="2.0"
 
@@ -71,9 +74,10 @@ What 'create' does:
      lease the state blob.
   5. Role Based Access Control Administrator on the subscription, with a condition that
      allows role-assignment write and delete only for Network Contributor, Container
-     Registry Repository Reader, Storage Blob Data Contributor, Azure Kubernetes Service
-     Cluster User Role, and Azure Kubernetes Service RBAC Cluster Admin. Re-run create
-     before the first CI cluster apply, or that apply fails on its first role assignment.
+     Registry Repository Reader, Container Registry Repository Writer, Storage Blob
+     Data Contributor, Azure Kubernetes Service Cluster User Role, and Azure Kubernetes
+     Service RBAC Cluster Admin. Re-run create before applying a new role from that
+     list, or the apply fails on the role assignment.
 
 Run 'make bootstrap' first -- step 4 needs the state account to exist.
 
@@ -189,6 +193,7 @@ assign_role() {
 rbac_admin_condition() {
 	local guids="4d97b98b-1d4f-4787-a291-c67834d212e7"
 	guids+=", b93aa761-3e63-49ed-ac28-beffa264f7ac"
+	guids+=", 2a1e307c-b015-4ebd-883e-5b7698a07328"
 	guids+=", ba92f5b4-2d11-453d-a403-e96b0029c9fe"
 	guids+=", 4abbcc35-e782-43d8-92c5-2d3f1bd2253f"
 	guids+=", b1ff04bb-8a4e-4dc4-8eb5-8693973ce19b"
