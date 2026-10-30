@@ -176,3 +176,8 @@ Contributor cannot write role assignments. The script adds Role Based Access Con
 Administrator on the subscription, constrained to the five built-in roles this cluster
 assigns. Without that re-run the apply fails on the first role assignment. Apply happens
 from `main` via CI. Do not apply this from a laptop.
+
+Argo CD lives in the next layer, `azure/autobutler/ci-gitops.tf`, not in the cluster
+module. Terraform installs Argo CD and External Secrets once. Argo applies what is under
+`gitops/autobutler/apps`. The runner chart is still not in this repo. Argo's server attaches the public IP
+reserved with the cluster, which `argo.errand.cloud.autobutler.org` already names.

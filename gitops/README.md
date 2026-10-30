@@ -1,0 +1,55 @@
+# GitOps
+
+Terraform installs Argo CD and External Secrets once, from
+`azure/autobutler/ci-gitops.tf`. Argo then applies whatever is under
+`gitops/autobutler/apps` on `main`. Terraform does not own the runner Helm release, and
+this directory is not the chart. The chart is `ghcr.io/autobutler-org/ci-runners`, and
+other people can install it without this repo's state.
+
+`gitops/autobutler/ci-runners/values.yaml` is the Azure-specific values file for that
+chart. It sits outside `apps/` so the root Application, which syncs `apps/` recursively,
+does not try to apply it as a manifest. The runner Application references it as a Helm
+value file via a second source.
+
+## Why the repository credential is not in `apps/`
+
+Argo cannot sync the manifest that creates its own credential for this repo, because it
+would need the credential to read the repo first. The ExternalSecret that projects
+`argocd-repo-token` into a repository secret is an `extraObject` on the Argo Helm
+release, applied when Terraform installs Argo, not when Argo syncs. The ClusterSecretStore
+is there for the same reason: Argo's own credential has to exist before the first sync.
+
+The GitHub App key is different. The chart consumes it after Argo is already up, so
+`gitops/autobutler/apps/github-app.yaml` is a normal manifest. It must not be passed to
+the chart with helm `--set`.
+
+## Secrets a person sets
+
+Terraform never holds either value. After the cluster and this layer have been applied,
+set both in `kv-autobutler-ci`. The commands for the App key are in
+`modules/ci-cluster/README.md`. The second secret is a token Argo uses as
+`x-access-token` to read `https://github.com/autobutler-org/iac.git`:
+
+```bash
+az keyvault secret set --vault-name kv-autobutler-ci \
+  --name argocd-repo-token \
+  --value '<token>'
+```
+
+Neither secret is created by Terraform. There is no `azurerm_key_vault_secret` for them.
+
+## The runner chart is not published yet
+
+`gitops/autobutler/apps/ci-runners.yaml` points at chart `ci-runners` version `0.1.0` in
+`ghcr.io/autobutler-org`. That tag does not exist yet. The Application stays unsynced
+until someone publishes it. This repo is not where the chart is developed.
+
+`workloadIdentityClientId` in the values file is an empty string on purpose. Fill it from
+the `ci_runner_identity_client_id` output after the first apply. Do not invent a GUID,
+and do not put a private key or a PAT in that file.
+
+## Argo
+
+The Argo server Service is a LoadBalancer on the static address from the cluster
+module. `argo.errand.cloud.autobutler.org` is the A record for that address. Runners
+dial out. The management UI at `errand.cloud.autobutler.org` is not this Service.

@@ -1,0 +1,10 @@
+# Azure-specific values for the autobutler-org/ci-runners chart.
+# The chart is not in this repo. Do not put a private key, a PAT, or a terraform
+# interpolation in this file.
+registry: autobutlerci.azurecr.io
+cache: https://stautobutlercicache.blob.core.windows.net/cache
+scaleToZero: true
+githubApp:
+  privateKeySecretName: github-app-private-key
+# Filled from the ci_runner_identity_client_id output after the first apply.
+workloadIdentityClientId: ""

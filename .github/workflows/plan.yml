@@ -55,6 +55,12 @@ jobs:
           # "changes present" and keeps the planfile; the wrapper breaks that.
           terraform_wrapper: false
 
+      # The Helm provider auths with kubelogin. local_account_disabled means there is no
+      # admin client certificate to use instead. az aks install-cli is idempotent and does
+      # not need a secret. apply.yml calls this workflow, so the step is not copied there.
+      - name: Install kubelogin
+        run: az aks install-cli
+
       - name: Init
         run: |
           make init

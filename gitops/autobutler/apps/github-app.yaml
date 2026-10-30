@@ -1,0 +1,21 @@
+# Projects kv-autobutler-ci secret github-app-private-key into the Secret the chart
+# reads. The chart must not receive the PEM via helm --set. The data key matches the
+# secret name; the chart reads that key.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: github-app-private-key
+  namespace: ci-runners
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: autobutler-ci
+  target:
+    name: github-app-private-key
+  data:
+    - secretKey: github-app-private-key
+      remoteRef:
+        key: github-app-private-key

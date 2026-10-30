@@ -39,5 +39,11 @@ terraform {
       source  = "hashicorp/azuread"
       version = "~> 3.0"
     }
+    # Helm installs Argo CD and External Secrets. 3.x is the current major. Auth is
+    # kubelogin, not the AKS admin certificate. See providers.tf.
+    helm = {
+      source  = "hashicorp/helm"
+      version = "~> 3.0"
+    }
   }
 }
