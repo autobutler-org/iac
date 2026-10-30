@@ -19,9 +19,9 @@ would need the credential to read the repo first. The ExternalSecret that projec
 release, applied when Terraform installs Argo, not when Argo syncs. The ClusterSecretStore
 is there for the same reason: Argo's own credential has to exist before the first sync.
 
-The GitHub App key is different. The chart consumes it after Argo is already up, so
-`gitops/autobutler/apps/github-app.yaml` is a normal manifest. It must not be passed to
-the chart with helm `--set`.
+The GitHub App key is different. The chart consumes it after Argo is already up. The
+manifest is `gitops/autobutler/pending/github-app.yaml` until the vault secret exists,
+and it must not be passed to the chart with helm `--set`.
 
 ## Secrets a person sets
 
@@ -38,11 +38,19 @@ az keyvault secret set --vault-name kv-autobutler-ci \
 
 Neither secret is created by Terraform. There is no `azurerm_key_vault_secret` for them.
 
-## The runner chart is not published yet
+## Not synced yet
 
-`gitops/autobutler/apps/ci-runners.yaml` points at chart `ci-runners` version `0.1.0` in
-`ghcr.io/autobutler-org`. That tag does not exist yet. The Application stays unsynced
-until someone publishes it. This repo is not where the chart is developed.
+`gitops/autobutler/pending/` is outside the directory Argo applies. Two manifests live
+there because applying them makes the root Application Degraded:
+
+* `ci-runners.yaml` points at chart `ci-runners` version `0.1.0` in
+  `ghcr.io/autobutler-org`. That tag does not exist yet. This repo is not where the
+  chart is developed.
+* `github-app.yaml` reads Key Vault secret `github-app-private-key`. That secret is
+  not set. The Actions GitHub App does not exist yet.
+
+Move each file back under `gitops/autobutler/apps/` when its dependency exists. Until
+then Argo only syncs the `ci-runners` namespace.
 
 `workloadIdentityClientId` in the values file is an empty string on purpose. Fill it from
 the `ci_runner_identity_client_id` output after the first apply. Do not invent a GUID,

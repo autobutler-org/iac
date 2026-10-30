@@ -1,4 +1,5 @@
-# The chart tag 0.1.0 is not published yet. This Application stays unsynced until it is.
+# Not under apps/ on purpose. The chart tag 0.1.0 is not published, and applying this
+# Application makes the root app Degraded. Move it back to apps/ when the tag exists.
 # This repo is not the chart source.
 #
 # OCI source shape from the Argo CD 3.5 docs: repoURL is the registry path without the
