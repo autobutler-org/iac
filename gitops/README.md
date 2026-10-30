@@ -50,7 +50,7 @@ container:
   image: autobutlerci.azurecr.io/quark/ci-backend:latest
 ```
 
-The other scoped image is `quark/ci-frontend`. Both sets belong to the
+The other scoped image is `quark/ci-frontend`. Later, a label will select a runner size, small, medium, or large, and each size will be its own scale set with its own CPU and memory request. Until that is asked for, both pools are the current 4-core size. Both sets belong to the
 organization runner group `errand`, not Default. A job names the group and the
 label:
 
