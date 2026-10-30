@@ -1,4 +1,4 @@
-# AutoButler's own CI cluster: AKS, a registry, a blob cache, two user-assigned identities,
+# AutoButler's own CI cluster: AKS, a registry, a blob cache, three user-assigned identities,
 # and a Key Vault. The runner Helm chart is not in this module. Other people install that
 # chart without this repo's state.
 #
@@ -38,6 +38,7 @@ locals {
   key_vault_name         = "kv-autobutler-ci"
   control_identity_name  = "id-autobutler-ci-control"
   runner_identity_name   = "id-autobutler-ci-runner"
+  image_identity_name    = "id-autobutler-ci-image"
   vnet_name              = "autobutler-ci-vnet"
   subnet_name            = "nodes"
   argocd_public_ip_name  = "autobutler-ci-argocd-pip"

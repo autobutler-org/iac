@@ -122,3 +122,7 @@ UI name, `errand.cloud.autobutler.org`, is not created here. That UI does not ex
 Runners still dial out to GitHub. The registry answers on `autobutlerci.azurecr.io` and
 the cache on `stautobutlercicache.blob.core.windows.net`. The cluster's `dns_prefix` is
 only the Azure-managed API hostname.
+
+`id-autobutler-ci-image` is the only identity that can push to that registry. Quark's
+CI image workflow federates to it on main. The client id is `image_identity_client_id`.
+The kubelet can pull. The runner identity cannot push.

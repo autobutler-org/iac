@@ -37,3 +37,23 @@ resource "azurerm_federated_identity_credential" "runner" {
   issuer                    = azurerm_kubernetes_cluster.this.oidc_issuer_url
   subject                   = "system:serviceaccount:ci-runners:ci-runners"
 }
+
+# Push identity for Quark's CI image workflow. Not the kubelet (pull only) and not
+# the runner. The subject is Quark's immutable OIDC prefix, read 2026-10-30 from
+# gh api repos/autobutler-org/quark/actions/oidc/customization/sub. A classic
+# repo:autobutler-org/quark subject would not match and login would fail with
+# AADSTS700213. workflow_dispatch and push on main both present this subject.
+resource "azurerm_user_assigned_identity" "image" {
+  name                = local.image_identity_name
+  resource_group_name = var.resource_group_name
+  location            = var.location
+  tags                = var.tags
+}
+
+resource "azurerm_federated_identity_credential" "image_quark_main" {
+  name                      = "quark-main"
+  user_assigned_identity_id = azurerm_user_assigned_identity.image.id
+  audience                  = ["api://AzureADTokenExchange"]
+  issuer                    = "https://token.actions.githubusercontent.com"
+  subject                   = "repo:autobutler-org@217851255/quark@929272958:ref:refs/heads/main"
+}
