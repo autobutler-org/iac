@@ -80,6 +80,13 @@ resource "azurerm_kubernetes_cluster" "this" {
     os_disk_type    = "Managed"
     vnet_subnet_id  = azurerm_subnet.nodes.id
     tags            = var.tags
+
+    # AKS writes these on create. Leaving the block unset plans them back to null.
+    upgrade_settings {
+      drain_timeout_in_minutes      = 0
+      max_surge                     = "10%"
+      node_soak_duration_in_minutes = 0
+    }
   }
 
   tags = var.tags
@@ -137,6 +144,13 @@ resource "azurerm_kubernetes_cluster_node_pool" "arm" {
   os_disk_type    = "Ephemeral"
   os_disk_size_gb = 128
 
+  # AKS writes these on create. Leaving the block unset plans them back to null.
+  upgrade_settings {
+    drain_timeout_in_minutes      = 0
+    max_surge                     = "10%"
+    node_soak_duration_in_minutes = 0
+  }
+
   node_labels = {
     "ci.autobutler.org/runner" = "true"
   }
@@ -161,6 +175,13 @@ resource "azurerm_kubernetes_cluster_node_pool" "x64" {
 
   os_disk_type    = "Managed"
   os_disk_size_gb = 128
+
+  # AKS writes these on create. Leaving the block unset plans them back to null.
+  upgrade_settings {
+    drain_timeout_in_minutes      = 0
+    max_surge                     = "10%"
+    node_soak_duration_in_minutes = 0
+  }
 
   node_labels = {
     "ci.autobutler.org/runner" = "true"
