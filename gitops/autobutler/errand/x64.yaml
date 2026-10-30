@@ -1,6 +1,8 @@
 githubConfigUrl: https://github.com/autobutler-org
 githubConfigSecret: github-app-private-key
 runnerScaleSetName: errand-x64
+# Same group as the Arm set. Both labels live here, not in Default.
+runnerGroup: errand
 minRunners: 0
 maxRunners: 100
 containerMode:

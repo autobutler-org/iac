@@ -37,7 +37,19 @@ There is no Errand chart. Argo installs GitHub's charts from
 The value files are `gitops/autobutler/errand/arm.yaml` and `x64.yaml`. They sit
 outside `apps/` so the directory sync does not apply them as manifests. Both sets
 use privileged Docker-in-Docker and the upstream runner image
-`ghcr.io/actions/actions-runner:2.338.2`.
+`ghcr.io/actions/actions-runner:2.338.2`. Both belong to the organization runner
+group `errand`, not Default. A job names the group and the label:
+
+```yaml
+runs-on:
+  group: errand
+  labels: errand
+```
+
+Use `labels: errand-x64` for the x64 set. Create the group in the organization
+before the scale sets sync. Give it private-repository visibility and do not
+allow public repositories. Privileged Docker-in-Docker on a public repository
+accepts jobs from fork pull requests.
 
 ## Argo
 
