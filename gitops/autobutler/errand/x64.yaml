@@ -22,9 +22,18 @@ template:
         operator: Equal
         value: "true"
         effect: NoSchedule
+    volumes:
+      - name: acr-login
+        configMap:
+          name: acr-login
+          defaultMode: 0755
     containers:
       - name: runner
-        # Quark publishes this. Always, so each new pod takes the tag main last pushed.
-        image: autobutlerci.azurecr.io/quark/ci:latest
-        imagePullPolicy: Always
+        image: ghcr.io/actions/actions-runner:2.338.2
         command: ["/home/runner/run.sh"]
+        env:
+          - name: ACTIONS_RUNNER_HOOK_JOB_STARTED
+            value: /home/runner/hooks/acr-login.sh
+        volumeMounts:
+          - name: acr-login
+            mountPath: /home/runner/hooks

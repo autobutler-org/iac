@@ -39,12 +39,18 @@ outside `apps/` so the directory sync does not apply them as manifests. Both set
 `controllerServiceAccount` to `errand-controller-gha-rs-controller` in `ci-runners`.
 Argo renders with `helm template`, whose lookup cannot see the controller
 Deployment, and chart 0.15.1 fails closed unless both the name and the namespace
-are set. Both sets use privileged Docker-in-Docker. The runner image is
-`autobutlerci.azurecr.io/quark/ci:latest` with `imagePullPolicy: Always`, so each new
-pod runs the image Quark last pushed to that tag. The kubelet pulls it. Do not
-point the scale sets at that tag until the image exists, or new pods cannot
-start. Both belong to the organization runner group `errand`, not Default. A
-job names the group and the label:
+are set. Both sets use privileged Docker-in-Docker and the upstream runner
+image. Before each job the runner logs into `autobutlerci.azurecr.io`, so a
+workflow can name a private job image:
+
+```yaml
+container:
+  image: autobutlerci.azurecr.io/quark/ci-backend:latest
+```
+
+The other images are `quark/ci-frontend` and `quark/ci-full`. Both sets belong
+to the organization runner group `errand`, not Default. A job names the group
+and the label:
 
 ```yaml
 runs-on:
