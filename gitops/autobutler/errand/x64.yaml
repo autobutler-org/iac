@@ -1,0 +1,20 @@
+githubConfigUrl: https://github.com/autobutler-org
+githubConfigSecret: github-app-private-key
+runnerScaleSetName: errand-x64
+minRunners: 0
+maxRunners: 100
+containerMode:
+  type: dind
+template:
+  spec:
+    nodeSelector:
+      kubernetes.io/arch: amd64
+    tolerations:
+      - key: ci.autobutler.org/runner
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
+    containers:
+      - name: runner
+        image: ghcr.io/actions/actions-runner:2.338.2
+        command: ["/home/runner/run.sh"]

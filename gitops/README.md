@@ -2,14 +2,8 @@
 
 Terraform installs Argo CD and External Secrets once, from
 `azure/autobutler/ci-gitops.tf`. Argo then applies whatever is under
-`gitops/autobutler/apps` on `main`. Terraform does not own the runner Helm release, and
-this directory is not the chart. The chart is `ghcr.io/autobutler-org/ci-runners`, and
-other people can install it without this repo's state.
-
-`gitops/autobutler/ci-runners/values.yaml` is the Azure-specific values file for that
-chart. It sits outside `apps/` so the root Application, which syncs `apps/` recursively,
-does not try to apply it as a manifest. The runner Application references it as a Helm
-value file via a second source.
+`gitops/autobutler/apps` on `main`. There is no Errand chart in this repo or in
+another one. The runner scale sets are GitHub's charts, with our values beside `apps/`.
 
 ## Repository credential
 
@@ -29,17 +23,21 @@ Terraform never holds the value. After the App exists, set its private key in
 `kv-autobutler-ci`. The command is in `modules/ci-cluster/README.md`. There is no
 `azurerm_key_vault_secret` for it.
 
-## Not synced yet
+## Runners
 
-`gitops/autobutler/pending/` is outside the directory Argo applies.
-`pending/ci-runners.yaml` points at chart `ci-runners` version `0.1.0` in
-`ghcr.io/autobutler-org`. That tag does not exist yet. This repo is not where the
-chart is developed. Move that file back under `apps/` when the tag exists. Until
-then Argo syncs the namespace and the GitHub App key, and does not install runners.
+There is no Errand chart. Argo installs GitHub's charts from
+`ghcr.io/actions/actions-runner-controller-charts` at version 0.15.1.
 
-`workloadIdentityClientId` in the values file is an empty string on purpose. Fill it from
-the `ci_runner_identity_client_id` output after the first apply. Do not invent a GUID,
-and do not put a private key or a PAT in that file.
+| Application | Chart | `runs-on` |
+| --- | --- | --- |
+| `errand-controller` | `gha-runner-scale-set-controller` | |
+| `errand` | `gha-runner-scale-set` | `errand` |
+| `errand-x64` | `gha-runner-scale-set` | `errand-x64` |
+
+The value files are `gitops/autobutler/errand/arm.yaml` and `x64.yaml`. They sit
+outside `apps/` so the directory sync does not apply them as manifests. Both sets
+use privileged Docker-in-Docker and the upstream runner image
+`ghcr.io/actions/actions-runner:2.338.2`.
 
 ## Argo
 

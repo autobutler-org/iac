@@ -1,7 +1,6 @@
 # Projects kv-autobutler-ci secret github-app-private-key into the Secret the
-# ci-runners chart reads. The chart must not receive the PEM via helm --set.
-# The key names are the ones gha-runner-scale-set requires. The ids are
-# autobutler-errand, the same numbers as gitops/autobutler/ci-runners/values.yaml.
+# runner scale sets read. The key names are the ones gha-runner-scale-set
+# requires. The ids are autobutler-errand. The PEM is not in this file.
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
