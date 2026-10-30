@@ -1,6 +1,7 @@
-# Projects kv-autobutler-ci secret github-app-private-key into the Secret the chart
-# reads. The chart must not receive the PEM via helm --set. The data key matches the
-# secret name; the chart reads that key.
+# Projects kv-autobutler-ci secret github-app-private-key into the Secret the
+# ci-runners chart reads. The chart must not receive the PEM via helm --set.
+# The key names are the ones gha-runner-scale-set requires. The ids are
+# autobutler-errand, the same numbers as gitops/autobutler/ci-runners/values.yaml.
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
@@ -15,7 +16,13 @@ spec:
     name: autobutler-ci
   target:
     name: github-app-private-key
+    template:
+      engineVersion: v2
+      data:
+        github_app_id: "5535744"
+        github_app_installation_id: "176747827"
+        github_app_private_key: "{{ .pem }}"
   data:
-    - secretKey: github-app-private-key
+    - secretKey: pem
       remoteRef:
         key: github-app-private-key
