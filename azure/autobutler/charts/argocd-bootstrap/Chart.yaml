@@ -1,0 +1,4 @@
+apiVersion: v2
+name: argocd-bootstrap
+description: Argo CD Application installed after the argo-cd chart has registered its CRDs.
+version: 0.1.0
