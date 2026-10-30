@@ -1,6 +1,9 @@
 githubConfigUrl: https://github.com/autobutler-org
 githubConfigSecret: github-app-private-key
 runnerScaleSetName: errand
+# Organization runner group. Create it before this scale set syncs. It is not
+# the Default group, so a job must name the group and the label.
+runnerGroup: errand
 minRunners: 0
 maxRunners: 100
 containerMode:
