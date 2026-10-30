@@ -64,6 +64,12 @@ jobs:
           terraform_version: ${{ env.TERRAFORM_VERSION }}
           terraform_wrapper: false
 
+      # The plan job installs kubelogin on its own runner. This job is a new machine, and
+      # helm_release runs kubelogin here during apply. local_account_disabled means there
+      # is no admin client certificate to fall back to.
+      - name: Install kubelogin
+        run: az aks install-cli
+
       - name: Download planfile
         uses: actions/download-artifact@v8
         with:

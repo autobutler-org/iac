@@ -57,7 +57,8 @@ jobs:
 
       # The Helm provider auths with kubelogin. local_account_disabled means there is no
       # admin client certificate to use instead. az aks install-cli is idempotent and does
-      # not need a secret. apply.yml calls this workflow, so the step is not copied there.
+      # not need a secret. The apply job is a different runner, so it installs kubelogin
+      # itself. Calling this workflow does not put the binary on that machine.
       - name: Install kubelogin
         run: az aks install-cli
 
