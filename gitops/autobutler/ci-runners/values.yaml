@@ -5,6 +5,10 @@ registry: autobutlerci.azurecr.io
 cache: https://stautobutlercicache.blob.core.windows.net/cache
 scaleToZero: true
 githubApp:
+  # autobutler-errand, installed on autobutler-org. The private key is the
+  # github-app-private-key Secret, not a value in this file.
+  id: 5535744
+  installationId: 176747827
   privateKeySecretName: github-app-private-key
 # Filled from the ci_runner_identity_client_id output after the first apply.
 workloadIdentityClientId: ""
