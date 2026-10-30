@@ -24,5 +24,7 @@ template:
         effect: NoSchedule
     containers:
       - name: runner
-        image: ghcr.io/actions/actions-runner:2.338.2
+        # Quark publishes this. Always, so each new pod takes the tag main last pushed.
+        image: autobutlerci.azurecr.io/ci:latest
+        imagePullPolicy: Always
         command: ["/home/runner/run.sh"]
