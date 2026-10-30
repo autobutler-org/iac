@@ -107,9 +107,9 @@ resource "helm_release" "argo_cd" {
           }
         }
       }
-      # The chart runs each extraObject through Helm tpl. The ESO template delimiters
-      # are escaped so that pass leaves `{{ .password }}` in the manifest for External
-      # Secrets, instead of evaluating it here where .password does not exist.
+      # No repository credential. This repo is public, and projecting
+      # argocd-repo-token made GitHub reject the clone: the value stored there is not a
+      # GitHub token. Add an ExternalSecret back only if the repo becomes private.
       extraObjects = [
         {
           apiVersion = "external-secrets.io/v1"
@@ -128,46 +128,6 @@ resource "helm_release" "argo_cd" {
                 }
               }
             }
-          }
-        },
-        {
-          apiVersion = "external-secrets.io/v1"
-          kind       = "ExternalSecret"
-          metadata = {
-            name      = "autobutler-org-iac"
-            namespace = "argocd"
-          }
-          spec = {
-            refreshInterval = "1h"
-            secretStoreRef = {
-              kind = "ClusterSecretStore"
-              name = "autobutler-ci"
-            }
-            target = {
-              name = "autobutler-org-iac"
-              template = {
-                engineVersion = "v2"
-                metadata = {
-                  labels = {
-                    "argocd.argoproj.io/secret-type" = "repository"
-                  }
-                }
-                data = {
-                  type     = "git"
-                  url      = "https://github.com/autobutler-org/iac.git"
-                  username = "x-access-token"
-                  password = "{{ \"{{ .password }}\" }}"
-                }
-              }
-            }
-            data = [
-              {
-                secretKey = "password"
-                remoteRef = {
-                  key = "argocd-repo-token"
-                }
-              },
-            ]
           }
         },
       ]

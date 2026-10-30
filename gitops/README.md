@@ -11,13 +11,12 @@ chart. It sits outside `apps/` so the root Application, which syncs `apps/` recu
 does not try to apply it as a manifest. The runner Application references it as a Helm
 value file via a second source.
 
-## Why the repository credential is not in `apps/`
+## Repository credential
 
-Argo cannot sync the manifest that creates its own credential for this repo, because it
-would need the credential to read the repo first. The ExternalSecret that projects
-`argocd-repo-token` into a repository secret is an `extraObject` on the Argo Helm
-release, applied when Terraform installs Argo, not when Argo syncs. The ClusterSecretStore
-is there for the same reason: Argo's own credential has to exist before the first sync.
+`autobutler-org/iac` is public, so Argo clones it with no credential. Do not project
+`argocd-repo-token` into a repository secret unless the repo becomes private. A value
+that is not a GitHub token makes GitHub reject the clone, and that failure blocks the
+sync of this public repo.
 
 The GitHub App key is different. The chart consumes it after Argo is already up. The
 manifest is `gitops/autobutler/pending/github-app.yaml` until the vault secret exists,
@@ -25,18 +24,9 @@ and it must not be passed to the chart with helm `--set`.
 
 ## Secrets a person sets
 
-Terraform never holds either value. After the cluster and this layer have been applied,
-set both in `kv-autobutler-ci`. The commands for the App key are in
-`modules/ci-cluster/README.md`. The second secret is a token Argo uses as
-`x-access-token` to read `https://github.com/autobutler-org/iac.git`:
-
-```bash
-az keyvault secret set --vault-name kv-autobutler-ci \
-  --name argocd-repo-token \
-  --value '<token>'
-```
-
-Neither secret is created by Terraform. There is no `azurerm_key_vault_secret` for them.
+Terraform never holds the value. After the App exists, set its private key in
+`kv-autobutler-ci`. The command is in `modules/ci-cluster/README.md`. There is no
+`azurerm_key_vault_secret` for it.
 
 ## Not synced yet
 
