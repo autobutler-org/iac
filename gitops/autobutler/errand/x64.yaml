@@ -25,6 +25,6 @@ template:
     containers:
       - name: runner
         # Quark publishes this. Always, so each new pod takes the tag main last pushed.
-        image: autobutlerci.azurecr.io/ci:latest
+        image: autobutlerci.azurecr.io/quark/ci:latest
         imagePullPolicy: Always
         command: ["/home/runner/run.sh"]
