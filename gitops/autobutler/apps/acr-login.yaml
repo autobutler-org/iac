@@ -1,0 +1,21 @@
+# Logs the runner into ACR before each job, so a workflow container: image can
+# be pulled. The hook runs on the runner, before the job container exists.
+# The token is the kubelet identity, which can pull and cannot push.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: acr-login
+  namespace: ci-runners
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+data:
+  acr-login.sh: |
+    #!/bin/bash
+    set -euo pipefail
+    url="http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://containerregistry.azure.net&client_id=be8a4c5c-917e-4301-a082-40e131d849dc"
+    token=$(curl -fsS --max-time 5 -H Metadata:true "$url" | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')
+    if [ -z "$token" ]; then
+      echo "ACR login failed: IMDS did not return a token" >&2
+      exit 1
+    fi
+    printf '%s' "$token" | docker login autobutlerci.azurecr.io --username 00000000-0000-0000-0000-000000000000 --password-stdin

@@ -39,10 +39,20 @@ outside `apps/` so the directory sync does not apply them as manifests. Both set
 `controllerServiceAccount` to `errand-controller-gha-rs-controller` in `ci-runners`.
 Argo renders with `helm template`, whose lookup cannot see the controller
 Deployment, and chart 0.15.1 fails closed unless both the name and the namespace
-are set. Both sets
-use privileged Docker-in-Docker and the upstream runner image
-`ghcr.io/actions/actions-runner:2.338.2`. Both belong to the organization runner
-group `errand`, not Default. A job names the group and the label:
+are set. Both sets use privileged Docker-in-Docker. The runner image is
+`autobutlerci.azurecr.io/quark/ci-full:latest` with `imagePullPolicy: Always`,
+so a job with no `container:` runs in that image. Before each job the runner
+logs into `autobutlerci.azurecr.io`, which lets a workflow opt into a smaller
+image:
+
+```yaml
+container:
+  image: autobutlerci.azurecr.io/quark/ci-backend:latest
+```
+
+The other scoped image is `quark/ci-frontend`. Both sets belong to the
+organization runner group `errand`, not Default. A job names the group and the
+label:
 
 ```yaml
 runs-on:
