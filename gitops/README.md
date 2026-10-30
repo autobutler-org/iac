@@ -39,11 +39,10 @@ outside `apps/` so the directory sync does not apply them as manifests. Both set
 `controllerServiceAccount` to `errand-controller-gha-rs-controller` in `ci-runners`.
 Argo renders with `helm template`, whose lookup cannot see the controller
 Deployment, and chart 0.15.1 fails closed unless both the name and the namespace
-are set. Both sets use privileged Docker-in-Docker. The runner image is
-`autobutlerci.azurecr.io/quark/ci-full:latest` with `imagePullPolicy: Always`,
-so a job with no `container:` runs in that image. Before each job the runner
-logs into `autobutlerci.azurecr.io`, which lets a workflow opt into a smaller
-image:
+are set. Both sets use privileged Docker-in-Docker and the public runner image
+`ghcr.io/actions/actions-runner:2.338.2`. The kubelet pulls that image. Before
+each job the runner logs into `autobutlerci.azurecr.io`, and Docker then pulls
+the image the workflow named:
 
 ```yaml
 container:
