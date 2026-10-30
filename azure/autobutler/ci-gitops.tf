@@ -91,7 +91,10 @@ resource "helm_release" "argo_cd" {
   create_namespace = true
 
   # The repo credential is an ExternalSecret. Its CRD comes from the release above.
-  depends_on = [helm_release.external_secrets]
+  # upgrade_install covers the failed install already left in the cluster: Helm kept
+  # the release name, and a plain install would refuse to reuse it.
+  depends_on      = [helm_release.external_secrets]
+  upgrade_install = true
 
   values = [
     yamlencode({
@@ -167,37 +170,19 @@ resource "helm_release" "argo_cd" {
             ]
           }
         },
-        {
-          apiVersion = "argoproj.io/v1alpha1"
-          kind       = "Application"
-          metadata = {
-            name      = "autobutler-ci"
-            namespace = "argocd"
-          }
-          spec = {
-            project = "default"
-            source = {
-              repoURL        = "https://github.com/autobutler-org/iac.git"
-              targetRevision = "main"
-              path           = "gitops/autobutler/apps"
-              directory = {
-                recurse = true
-              }
-            }
-            destination = {
-              server    = "https://kubernetes.default.svc"
-              namespace = "ci-runners"
-            }
-            syncPolicy = {
-              automated = {
-                prune    = true
-                selfHeal = true
-              }
-              syncOptions = ["CreateNamespace=true"]
-            }
-          }
-        },
       ]
     }),
   ]
+}
+
+# Not in the argo-cd release. That chart installs the Application CRD and Helm builds
+# the whole manifest before the API server will serve the new kind, so the apply died
+# with "no matches for kind Application". This release runs after that one, when the
+# CRD is already registered.
+resource "helm_release" "argocd_bootstrap" {
+  name            = "argocd-bootstrap"
+  chart           = "${path.module}/charts/argocd-bootstrap"
+  namespace       = "argocd"
+  upgrade_install = true
+  depends_on      = [helm_release.argo_cd]
 }
