@@ -1,0 +1,46 @@
+githubConfigUrl: https://github.com/autobutler-org
+githubConfigSecret: github-app-private-key
+runnerScaleSetName: errand-arm-backend
+# Jobs on this label use container:
+# autobutlerci.azurecr.io/quark/ci-backend:latest.
+
+# Organization runner group errand. Create it before this scale set syncs.
+# It is not the Default group, so a job names the group and this label.
+runnerGroup: errand
+# Argo renders with helm template, and that lookup cannot see the controller
+# Deployment even when the label is present. Set both fields. The name helper
+# and the namespace helper each call lookup when their own field is empty.
+controllerServiceAccount:
+  name: errand-controller-gha-rs-controller
+  namespace: ci-runners
+minRunners: 0
+maxRunners: 100
+containerMode:
+  type: dind
+template:
+  spec:
+    nodeSelector:
+      kubernetes.io/arch: arm64
+    tolerations:
+      - key: ci.autobutler.org/runner
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
+    volumes:
+      - name: acr-login
+        configMap:
+          name: acr-login
+          defaultMode: 0755
+    containers:
+      - name: runner
+        # Public image. The kubelet can pull it, and it contains
+        # /home/runner/run.sh. ci-backend and ci-frontend do not. Docker
+        # pulls the job's container: image after the ACR login hook.
+        image: ghcr.io/actions/actions-runner:2.338.2
+        command: ["/home/runner/run.sh"]
+        env:
+          - name: ACTIONS_RUNNER_HOOK_JOB_STARTED
+            value: /home/runner/hooks/acr-login.sh
+        volumeMounts:
+          - name: acr-login
+            mountPath: /home/runner/hooks

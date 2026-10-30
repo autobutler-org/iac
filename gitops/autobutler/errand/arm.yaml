@@ -1,8 +1,10 @@
 githubConfigUrl: https://github.com/autobutler-org
 githubConfigSecret: github-app-private-key
-runnerScaleSetName: errand
-# Organization runner group. Create it before this scale set syncs. It is not
-# the Default group, so a job must name the group and the label.
+runnerScaleSetName: errand-arm
+# General pool for this architecture. A job may set container: or run on the pod.
+
+# Organization runner group errand. Create it before this scale set syncs.
+# It is not the Default group, so a job names the group and this label.
 runnerGroup: errand
 # Argo renders with helm template, and that lookup cannot see the controller
 # Deployment even when the label is present. Set both fields. The name helper
@@ -30,10 +32,10 @@ template:
           defaultMode: 0755
     containers:
       - name: runner
-        # Default job environment. Always, so a new pod takes the tag main last pushed.
-        # Smaller jobs set container: to ci-backend or ci-frontend.
-        image: autobutlerci.azurecr.io/quark/ci-full:latest
-        imagePullPolicy: Always
+        # Public image. The kubelet can pull it, and it contains
+        # /home/runner/run.sh. ci-backend and ci-frontend do not. Docker
+        # pulls the job's container: image after the ACR login hook.
+        image: ghcr.io/actions/actions-runner:2.338.2
         command: ["/home/runner/run.sh"]
         env:
           - name: ACTIONS_RUNNER_HOOK_JOB_STARTED
