@@ -18,6 +18,7 @@ template:
   spec:
     nodeSelector:
       kubernetes.io/arch: arm64
+      ci.autobutler.org/runner: "true"
     tolerations:
       - key: ci.autobutler.org/runner
         operator: Equal
