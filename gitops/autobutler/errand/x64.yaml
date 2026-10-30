@@ -13,6 +13,14 @@ minRunners: 0
 maxRunners: 100
 containerMode:
   type: dind
+# The listener is one pod for the scale set. It belongs on the system node.
+listenerTemplate:
+  spec:
+    tolerations:
+      - key: CriticalAddonsOnly
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
 template:
   spec:
     nodeSelector:
