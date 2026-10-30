@@ -30,7 +30,10 @@ template:
           defaultMode: 0755
     containers:
       - name: runner
-        image: ghcr.io/actions/actions-runner:2.338.2
+        # Default job environment. Always, so a new pod takes the tag main last pushed.
+        # Smaller jobs set container: to ci-backend or ci-frontend.
+        image: autobutlerci.azurecr.io/quark/ci-full:latest
+        imagePullPolicy: Always
         command: ["/home/runner/run.sh"]
         env:
           - name: ACTIONS_RUNNER_HOOK_JOB_STARTED
