@@ -1,9 +1,9 @@
-# errand-x64-full scale set. runs-on label errand-x64-full, group errand.
+# quark-arm-full scale set. runs-on label quark-arm-full, group errand.
 # Values stay outside apps/ so this directory sync does not apply them as manifests.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: errand-x64-full
+  name: quark-arm-full
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "3"
@@ -14,9 +14,9 @@ spec:
       chart: gha-runner-scale-set
       targetRevision: 0.15.1
       helm:
-        releaseName: errand-x64-full
+        releaseName: quark-arm-full
         valueFiles:
-          - $values/gitops/autobutler/errand/x64/quark/full.yaml
+          - $values/gitops/autobutler/errand/arm/quark/full.yaml
     - repoURL: https://github.com/autobutler-org/iac.git
       targetRevision: main
       ref: values

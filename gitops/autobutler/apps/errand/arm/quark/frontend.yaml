@@ -1,9 +1,9 @@
-# errand-arm-frontend scale set. runs-on label errand-arm-frontend, group errand.
+# quark-arm-frontend scale set. runs-on label quark-arm-frontend, group errand.
 # Values stay outside apps/ so this directory sync does not apply them as manifests.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: errand-arm-frontend
+  name: quark-arm-frontend
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "3"
@@ -14,7 +14,7 @@ spec:
       chart: gha-runner-scale-set
       targetRevision: 0.15.1
       helm:
-        releaseName: errand-arm-frontend
+        releaseName: quark-arm-frontend
         valueFiles:
           - $values/gitops/autobutler/errand/arm/quark/frontend.yaml
     - repoURL: https://github.com/autobutler-org/iac.git

@@ -28,17 +28,17 @@ Terraform never holds the value. After the App exists, set its private key in
 There is no Errand chart. Argo installs GitHub's charts from
 `ghcr.io/actions/actions-runner-controller-charts` at version 0.15.1.
 
-| Application | Chart | `runs-on` label | Job image |
+| Application | Values | `runs-on` label | Job image |
 | --- | --- | --- | --- |
-| `errand-controller` | `gha-runner-scale-set-controller` | | |
-| `errand-arm` | `gha-runner-scale-set` | `errand-arm` | any, or none |
-| `errand-arm-backend` | `gha-runner-scale-set` | `errand-arm-backend` | `quark/ci-backend` |
-| `errand-arm-frontend` | `gha-runner-scale-set` | `errand-arm-frontend` | `quark/ci-frontend` |
-| `errand-arm-full` | `gha-runner-scale-set` | `errand-arm-full` | `quark/ci-full` |
-| `errand-x64` | `gha-runner-scale-set` | `errand-x64` | any, or none |
-| `errand-x64-backend` | `gha-runner-scale-set` | `errand-x64-backend` | `quark/ci-backend` |
-| `errand-x64-frontend` | `gha-runner-scale-set` | `errand-x64-frontend` | `quark/ci-frontend` |
-| `errand-x64-full` | `gha-runner-scale-set` | `errand-x64-full` | `quark/ci-full` |
+| `errand-controller` | | | |
+| `arm` | `errand/arm/arm.yaml` | `arm` | GitHub runner |
+| `quark-arm-backend` | `errand/arm/quark/backend.yaml` | `quark-arm-backend` | `quark/ci-backend` |
+| `quark-arm-frontend` | `errand/arm/quark/frontend.yaml` | `quark-arm-frontend` | `quark/ci-frontend` |
+| `quark-arm-full` | `errand/arm/quark/full.yaml` | `quark-arm-full` | `quark/ci-full` |
+| `x64` | `errand/x64/x64.yaml` | `x64` | GitHub runner |
+| `quark-x64-backend` | `errand/x64/quark/backend.yaml` | `quark-x64-backend` | `quark/ci-backend` |
+| `quark-x64-frontend` | `errand/x64/quark/frontend.yaml` | `quark-x64-frontend` | `quark/ci-frontend` |
+| `quark-x64-full` | `errand/x64/quark/full.yaml` | `quark-x64-full` | `quark/ci-full` |
 
 One Application is one Helm release, and one release registers one label.
 `runnerScaleSetName` is that label. Listing several paths under `valueFiles`
@@ -58,15 +58,17 @@ Docker then pulls the image named by `container:`.
 ```yaml
 runs-on:
   group: errand
-  labels: errand-arm-backend
+  labels: quark-arm-backend
 container:
   image: autobutlerci.azurecr.io/quark/ci-backend:latest
 ```
 
-`errand-arm-frontend` uses `quark/ci-frontend`, and `errand-arm-full` uses
-`quark/ci-full`. The x64 labels are the same three images on `errand-x64-backend`,
-`errand-x64-frontend`, and `errand-x64-full`. All eight sets belong to the
-organization runner group `errand`, not Default. Create that group before the
+`quark-arm-frontend` uses `quark/ci-frontend`, and `quark-arm-full` uses
+`quark/ci-full`. The x64 labels are `quark-x64-backend`, `quark-x64-frontend`,
+and `quark-x64-full`. `arm` and `x64` are the GitHub runner image, with no
+required `container:`. The Application for each set lives under
+`gitops/autobutler/apps/errand/`, in the same `arm/` and `x64/` layout as the
+values. All eight sets belong to the organization runner group `errand`, not Default. Create that group before the
 scale sets sync. Give it private-repository visibility and do not allow public
 repositories. Privileged Docker-in-Docker on a public repository accepts jobs
 from fork pull requests.

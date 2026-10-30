@@ -1,9 +1,8 @@
 githubConfigUrl: https://github.com/autobutler-org
 githubConfigSecret: github-app-private-key
-runnerScaleSetName: errand-x64-full
+runnerScaleSetName: quark-x64-full
 # Jobs on this label use container:
 # autobutlerci.azurecr.io/quark/ci-full:latest.
-
 # Organization runner group errand. Create it before this scale set syncs.
 # It is not the Default group, so a job names the group and this label.
 runnerGroup: errand
