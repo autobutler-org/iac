@@ -77,3 +77,63 @@ output "schmeide_control_key_vault_name" {
   description = "Key Vault whose webhook-secret, github-app-private-key and runner-tokens secrets a person sets by hand after the first apply."
   value       = module.schmeide_control.key_vault_name
 }
+
+output "ci_cluster_name" {
+  description = "AKS cluster name. kubectl and, later, Argo CD target this cluster."
+  value       = module.ci_cluster.cluster_name
+}
+
+output "ci_cluster_id" {
+  description = "ARM id of the CI AKS cluster. CI's cluster role assignments are scoped to this, not the subscription."
+  value       = module.ci_cluster.cluster_id
+}
+
+output "ci_resource_group_name" {
+  description = "Resource group the CI cluster, registry, cache, identities, and vault live in."
+  value       = module.ci_cluster.resource_group_name
+}
+
+output "ci_oidc_issuer_url" {
+  description = "OIDC issuer URL of the CI cluster. Federated credentials for workload identity use this as the issuer."
+  value       = module.ci_cluster.oidc_issuer_url
+}
+
+output "ci_acr_login_server" {
+  description = "ACR login server the runner chart pulls from. The kubelet identity can pull; nothing here grants push."
+  value       = module.ci_cluster.acr_login_server
+}
+
+output "ci_cache_container_url" {
+  description = "HTTPS URL of the private CI cache container. Runners authenticate with the runner identity."
+  value       = module.ci_cluster.cache_container_url
+}
+
+output "ci_key_vault_name" {
+  description = "CI Key Vault a person writes the Actions GitHub App private key into after apply. Terraform stores no secret value."
+  value       = module.ci_cluster.key_vault_name
+}
+
+output "ci_key_vault_id" {
+  description = "ARM id of the CI Key Vault. A later access policy attaches here. This output is not a secret."
+  value       = module.ci_cluster.key_vault_id
+}
+
+output "ci_runner_identity_client_id" {
+  description = "Client id of the CI runner workload identity. The runner chart's Helm values take this after the first apply. It is not a secret."
+  value       = module.ci_cluster.runner_identity_client_id
+}
+
+output "ci_runner_identity_principal_id" {
+  description = "Object id of the CI runner workload identity. The cache role assignment and the vault access policy use it."
+  value       = module.ci_cluster.runner_identity_principal_id
+}
+
+output "ci_argocd_fqdn" {
+  description = "Public hostname of the Argo CD UI, argo.errand.cloud.autobutler.org. The A record aliases the reserved public IP."
+  value       = module.ci_cluster.argocd_fqdn
+}
+
+output "ci_control_plane_identity_principal_id" {
+  description = "Object id of the CI control-plane identity. It has Network Contributor on the cluster VNet, which the cluster create waits for."
+  value       = module.ci_cluster.control_plane_identity_principal_id
+}

@@ -8,7 +8,12 @@
 # role assignments) is ARM and could have been, but splitting them across two tools for one
 # logical setup step would be worse than keeping them together here.
 #
-# Safe to re-run: every step checks for what it would create first.
+# Safe to re-run: every step checks for what it would create first. create also assigns
+# Role Based Access Control Administrator on the subscription, with an ABAC condition.
+# Contributor cannot write role assignments, and the CI cluster needs several. The
+# condition allows write and delete only for the five built-in roles that cluster's
+# terraform uses. An assignment with an empty condition is not this grant. It would be
+# an unconstrained RBAC administrator, and doctor reports that as missing.
 
 set -euo pipefail
 
@@ -21,6 +26,17 @@ ENVIRONMENT="production"
 
 readonly ISSUER="https://token.actions.githubusercontent.com"
 readonly AUDIENCE="api://AzureADTokenExchange"
+
+# Role Based Access Control Administrator. Definition id verified 2026-10-29:
+#   az role definition list --name "Role Based Access Control Administrator" \
+#     --query "[0].name" -o tsv
+#   f58310d9-a9f6-439a-9e8d-f62e7b41a168
+# The five ids in rbac_admin_condition were checked the same way, against the names
+# Network Contributor, Container Registry Repository Reader, Storage Blob Data
+# Contributor, Azure Kubernetes Service Cluster User Role, and Azure Kubernetes Service
+# RBAC Cluster Admin. Azure returned the documented ids. None differed.
+readonly RBAC_ADMIN_ROLE="Role Based Access Control Administrator"
+readonly RBAC_ADMIN_CONDITION_VERSION="2.0"
 
 usage() {
 	cat <<USAGE
@@ -53,6 +69,11 @@ What 'create' does:
   3. Contributor on the subscription, so terraform can manage resources.
   4. Storage Blob Data Contributor on the state account, so terraform can read, write and
      lease the state blob.
+  5. Role Based Access Control Administrator on the subscription, with a condition that
+     allows role-assignment write and delete only for Network Contributor, Container
+     Registry Repository Reader, Storage Blob Data Contributor, Azure Kubernetes Service
+     Cluster User Role, and Azure Kubernetes Service RBAC Cluster Admin. Re-run create
+     before the first CI cluster apply, or that apply fails on its first role assignment.
 
 Run 'make bootstrap' first -- step 4 needs the state account to exist.
 
@@ -161,6 +182,92 @@ assign_role() {
 	echo "  created  ${role}"
 }
 
+# The shape from the azurerm role_assignment ABAC example: ForAnyOfAnyValues:GuidEquals
+# on the write/request side and on the delete/resource side. Compacted to one line so it
+# can sit in the JSON body `az role assignment update` requires. Whitespace is not
+# significant; doctor and create compare with it stripped.
+rbac_admin_condition() {
+	local guids="4d97b98b-1d4f-4787-a291-c67834d212e7"
+	guids+=", b93aa761-3e63-49ed-ac28-beffa264f7ac"
+	guids+=", ba92f5b4-2d11-453d-a403-e96b0029c9fe"
+	guids+=", 4abbcc35-e782-43d8-92c5-2d3f1bd2253f"
+	guids+=", b1ff04bb-8a4e-4dc4-8eb5-8693973ce19b"
+	printf '%s' \
+		"((!(ActionMatches{'Microsoft.Authorization/roleAssignments/write'}))" \
+		" OR (@Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {${guids}}))" \
+		" AND ((!(ActionMatches{'Microsoft.Authorization/roleAssignments/delete'}))" \
+		" OR (@Resource[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {${guids}}))"
+}
+
+normalize_condition() {
+	printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]'
+}
+
+# Empty, and the literal "null"/"None" some az tsv paths print for an absent property,
+# are the same thing: no condition. An unconstrained grant must not count as done.
+condition_is_empty() {
+	local value="$1"
+	[[ -z "$value" || "$value" == "null" || "$value" == "None" ]]
+}
+
+# assign_role cannot pass a condition. This sibling can, and a re-run stays idempotent:
+# same condition prints ok, a different condition is updated in place, a missing
+# assignment is created. Update rather than delete-and-create, so a failed create cannot
+# leave CI with no role-assignment permission at all.
+assign_constrained_rbac_admin() {
+	local scope="$1" object_id="$2"
+	local role="$RBAC_ADMIN_ROLE"
+	local condition assignment_name current principal_type role_definition_id
+	condition=$(rbac_admin_condition)
+
+	assignment_name=$(az role assignment list --assignee "$object_id" --scope "$scope" \
+		--query "[?roleDefinitionName=='${role}'] | [0].name" -o tsv 2>/dev/null || true)
+	if [[ -n "$assignment_name" ]]; then
+		current=$(az role assignment list --assignee "$object_id" --scope "$scope" \
+			--query "[?roleDefinitionName=='${role}'] | [0].condition" -o tsv 2>/dev/null || true)
+		if ! condition_is_empty "$current" \
+			&& [[ "$(normalize_condition "$current")" == "$(normalize_condition "$condition")" ]]; then
+			echo "  ok       ${role} already assigned with the same condition"
+			return
+		fi
+
+		principal_type=$(az role assignment list --assignee "$object_id" --scope "$scope" \
+			--query "[?roleDefinitionName=='${role}'] | [0].principalType" -o tsv)
+		role_definition_id=$(az role assignment list --assignee "$object_id" --scope "$scope" \
+			--query "[?roleDefinitionName=='${role}'] | [0].roleDefinitionId" -o tsv)
+
+		# `az role assignment update` takes the assignment as JSON. It has no --condition
+		# flag. scope and name address it; the other fields are what the PUT sends back.
+		az role assignment update --role-assignment @- --only-show-errors >/dev/null <<EOF
+{
+  "name": "${assignment_name}",
+  "scope": "${scope}",
+  "principalId": "${object_id}",
+  "principalType": "${principal_type}",
+  "roleDefinitionId": "${role_definition_id}",
+  "condition": "${condition}",
+  "conditionVersion": "${RBAC_ADMIN_CONDITION_VERSION}"
+}
+EOF
+		if condition_is_empty "$current"; then
+			echo "  updated  ${role} (assignment had no condition)"
+		else
+			echo "  updated  ${role} condition"
+		fi
+		return
+	fi
+
+	az role assignment create \
+		--role "$role" \
+		--assignee-object-id "$object_id" \
+		--assignee-principal-type ServicePrincipal \
+		--scope "$scope" \
+		--condition "$condition" \
+		--condition-version "$RBAC_ADMIN_CONDITION_VERSION" \
+		--only-show-errors >/dev/null
+	echo "  created  ${role}"
+}
+
 cmd_doctor() {
 	require_tools
 
@@ -225,6 +332,23 @@ cmd_doctor() {
 			missing=1
 		fi
 	done
+
+	# Present with an empty condition is MISSING on purpose. That assignment would be an
+	# unconstrained RBAC administrator, which is not the grant this script leaves behind.
+	local rbac_name rbac_condition
+	rbac_name=$(az role assignment list --assignee "$sp_object_id" --scope "$sub_scope" \
+		--query "[?roleDefinitionName=='${RBAC_ADMIN_ROLE}'] | [0].name" -o tsv 2>/dev/null || true)
+	rbac_condition=$(az role assignment list --assignee "$sp_object_id" --scope "$sub_scope" \
+		--query "[?roleDefinitionName=='${RBAC_ADMIN_ROLE}'] | [0].condition" -o tsv 2>/dev/null || true)
+	if [[ -z "$rbac_name" ]] || condition_is_empty "$rbac_condition"; then
+		echo "    MISSING ${RBAC_ADMIN_ROLE}"
+		missing=1
+	elif [[ "$(normalize_condition "$rbac_condition")" == "$(normalize_condition "$(rbac_admin_condition)")" ]]; then
+		echo "    ok      ${RBAC_ADMIN_ROLE}"
+	else
+		echo "    STALE   ${RBAC_ADMIN_ROLE} -- condition differs; '${0##*/} create' updates it"
+		missing=1
+	fi
 
 	if ((missing)); then
 		echo
@@ -338,6 +462,7 @@ JSON
 
 	echo "Role assignments:"
 	assign_role "Contributor" "/subscriptions/${subscription_id}" "$sp_object_id"
+	assign_constrained_rbac_admin "/subscriptions/${subscription_id}" "$sp_object_id"
 
 	local state_scope="/subscriptions/${subscription_id}/resourceGroups/${STATE_RESOURCE_GROUP}/providers/Microsoft.Storage/storageAccounts/${STATE_ACCOUNT}"
 	if az storage account show -n "$STATE_ACCOUNT" -g "$STATE_RESOURCE_GROUP" \

@@ -153,3 +153,26 @@ These resources predate this repo. They were adopted through `import` blocks rat
 created, and that adoption is done — state holds all three and `make plan` is clean. The
 `import` blocks have been removed; see "Adopting an existing resource" for the loop to
 follow next time.
+
+### CI cluster
+
+`modules/ci-cluster/` is AutoButler's own CI, not the ten-node product sketch. Terraform
+owns the cluster, the registry, the cache account, the identities, and the Key Vault.
+Argo CD owns the runner chart, and the chart is not in this repo. Other people install
+that chart without this repo's state.
+
+The cluster is the Free tier. The research cost table used AKS Standard for a ten-node
+always-on sketch. This install does not need that uptime SLA. One `Standard_D2s_v6`
+system node stays up, and it does not run jobs. The Arm runner pool starts at 2 nodes
+and can grow to 100. The x64 runner pool starts empty and can grow to the same ceiling.
+
+`argo.errand.cloud.autobutler.org` is an alias A record for a static public IP reserved
+in the cluster resource group. The Argo Service attaches that address. Runners still
+dial out to GitHub. The registry and the cache have their own Azure hostnames.
+
+Before the first apply, someone who can assign roles has to re-run
+`./bootstrap/github-oidc.bash create`. The GitHub Actions identity is a Contributor, and
+Contributor cannot write role assignments. The script adds Role Based Access Control
+Administrator on the subscription, constrained to the five built-in roles this cluster
+assigns. Without that re-run the apply fails on the first role assignment. Apply happens
+from `main` via CI. Do not apply this from a laptop.

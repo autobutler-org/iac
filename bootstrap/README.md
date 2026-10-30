@@ -71,14 +71,17 @@ app registrations are Microsoft Graph, not ARM.
 ./bootstrap/github-oidc.bash doctor     # what exists now, and what is missing
 ```
 
-Run it after step 1 — it grants the CI principal Storage Blob Data Contributor on the state
-account, and skips that grant with a warning if the account does not exist yet.
+Run it after step 1. It grants the CI principal Storage Blob Data Contributor on the state
+account, and skips that grant with a warning if the account does not exist yet. It also
+grants Role Based Access Control Administrator on the subscription, with a condition that
+limits which built-in roles CI may assign or delete.
 
 It creates the app registration and service principal, three federated credentials (one per
 subject the workflows mint: `pull_request`, `ref:refs/heads/main`, and
-`environment:production`), a Contributor role assignment on the subscription, and the state
-account grant. It finishes by printing the `gh variable set` commands for
-`AZURE_CLIENT_ID`, `AZURE_TENANT_ID` and `AZURE_SUBSCRIPTION_ID`.
+`environment:production`), a Contributor role assignment on the subscription, the state
+account grant, and the conditional Role Based Access Control Administrator grant. It
+finishes by printing the `gh variable set` commands for `AZURE_CLIENT_ID`,
+`AZURE_TENANT_ID` and `AZURE_SUBSCRIPTION_ID`.
 
 Those three are repository **variables**, not secrets. None of them is sensitive, and with
 OIDC there is no client secret at all — which is the point.

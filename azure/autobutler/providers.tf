@@ -8,3 +8,8 @@
 provider "azurerm" {
   features {}
 }
+
+# Same Azure CLI login as azurerm. No separate credential. modules/ci-cluster uses this
+# to look up the github-actions-iac service principal, so a plan does not grant cluster
+# admin to whoever happened to run it.
+provider "azuread" {}
