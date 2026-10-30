@@ -20,3 +20,8 @@ spec:
     automated:
       prune: true
       selfHeal: true
+    # The scale-set CRDs are larger than the kubectl last-applied-configuration
+    # annotation. Client-side apply rejects them. Server-side apply does not
+    # write that annotation.
+    syncOptions:
+      - ServerSideApply=true
