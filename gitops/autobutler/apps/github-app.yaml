@@ -1,7 +1,3 @@
-# Not under apps/ on purpose. Key Vault has no github-app-private-key yet, and an
-# ExternalSecret for a missing secret makes the root app Degraded. Move it back to
-# apps/ after that secret is set.
-#
 # Projects kv-autobutler-ci secret github-app-private-key into the Secret the chart
 # reads. The chart must not receive the PEM via helm --set. The data key matches the
 # secret name; the chart reads that key.

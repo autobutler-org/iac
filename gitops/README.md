@@ -18,9 +18,10 @@ value file via a second source.
 that is not a GitHub token makes GitHub reject the clone, and that failure blocks the
 sync of this public repo.
 
-The GitHub App key is different. The chart consumes it after Argo is already up. The
-manifest is `gitops/autobutler/pending/github-app.yaml` until the vault secret exists,
-and it must not be passed to the chart with helm `--set`.
+The GitHub App key is different. The chart consumes it after Argo is already up.
+`gitops/autobutler/apps/github-app.yaml` projects it into a Kubernetes Secret. It must
+not be passed to the chart with helm `--set`. The app is `autobutler-errand`, id
+`5535744`, installation `176747827`.
 
 ## Secrets a person sets
 
@@ -30,17 +31,11 @@ Terraform never holds the value. After the App exists, set its private key in
 
 ## Not synced yet
 
-`gitops/autobutler/pending/` is outside the directory Argo applies. Two manifests live
-there because applying them makes the root Application Degraded:
-
-* `ci-runners.yaml` points at chart `ci-runners` version `0.1.0` in
-  `ghcr.io/autobutler-org`. That tag does not exist yet. This repo is not where the
-  chart is developed.
-* `github-app.yaml` reads Key Vault secret `github-app-private-key`. That secret is
-  not set. The Actions GitHub App does not exist yet.
-
-Move each file back under `gitops/autobutler/apps/` when its dependency exists. Until
-then Argo only syncs the `ci-runners` namespace.
+`gitops/autobutler/pending/` is outside the directory Argo applies.
+`pending/ci-runners.yaml` points at chart `ci-runners` version `0.1.0` in
+`ghcr.io/autobutler-org`. That tag does not exist yet. This repo is not where the
+chart is developed. Move that file back under `apps/` when the tag exists. Until
+then Argo syncs the namespace and the GitHub App key, and does not install runners.
 
 `workloadIdentityClientId` in the values file is an empty string on purpose. Fill it from
 the `ci_runner_identity_client_id` output after the first apply. Do not invent a GUID,
