@@ -32,13 +32,13 @@ There is no Errand chart. Argo installs GitHub's charts from
 | --- | --- | --- | --- |
 | `errand-controller` | | | |
 | `arm` | `errand/arm/arm.yaml` | `arm` | GitHub runner |
-| `quark-arm-backend` | `errand/arm/quark/backend.yaml` | `quark-arm-backend` | `quark/ci-backend` |
-| `quark-arm-frontend` | `errand/arm/quark/frontend.yaml` | `quark-arm-frontend` | `quark/ci-frontend` |
-| `quark-arm-full` | `errand/arm/quark/full.yaml` | `quark-arm-full` | `quark/ci-full` |
+| `arm-quark-backend` | `errand/arm/quark/backend.yaml` | `arm-quark-backend` | `quark/ci-backend` |
+| `arm-quark-frontend` | `errand/arm/quark/frontend.yaml` | `arm-quark-frontend` | `quark/ci-frontend` |
+| `arm-quark-full` | `errand/arm/quark/full.yaml` | `arm-quark-full` | `quark/ci-full` |
 | `x64` | `errand/x64/x64.yaml` | `x64` | GitHub runner |
-| `quark-x64-backend` | `errand/x64/quark/backend.yaml` | `quark-x64-backend` | `quark/ci-backend` |
-| `quark-x64-frontend` | `errand/x64/quark/frontend.yaml` | `quark-x64-frontend` | `quark/ci-frontend` |
-| `quark-x64-full` | `errand/x64/quark/full.yaml` | `quark-x64-full` | `quark/ci-full` |
+| `x64-quark-backend` | `errand/x64/quark/backend.yaml` | `x64-quark-backend` | `quark/ci-backend` |
+| `x64-quark-frontend` | `errand/x64/quark/frontend.yaml` | `x64-quark-frontend` | `quark/ci-frontend` |
+| `x64-quark-full` | `errand/x64/quark/full.yaml` | `x64-quark-full` | `quark/ci-full` |
 
 One Application is one Helm release, and one release registers one label.
 `runnerScaleSetName` is that label. Listing several paths under `valueFiles`
@@ -58,14 +58,14 @@ Docker then pulls the image named by `container:`.
 ```yaml
 runs-on:
   group: errand
-  labels: quark-arm-backend
+  labels: arm-quark-backend
 container:
   image: autobutlerci.azurecr.io/quark/ci-backend:latest
 ```
 
-`quark-arm-frontend` uses `quark/ci-frontend`, and `quark-arm-full` uses
-`quark/ci-full`. The x64 labels are `quark-x64-backend`, `quark-x64-frontend`,
-and `quark-x64-full`. `arm` and `x64` are the GitHub runner image, with no
+`arm-quark-frontend` uses `quark/ci-frontend`, and `arm-quark-full` uses
+`quark/ci-full`. The x64 labels are `x64-quark-backend`, `x64-quark-frontend`,
+and `x64-quark-full`. `arm` and `x64` are the GitHub runner image, with no
 required `container:`. The Application for each set lives under
 `gitops/autobutler/apps/errand/`, in the same `arm/` and `x64/` layout as the
 values. All eight sets belong to the organization runner group `errand`, not Default. Create that group before the

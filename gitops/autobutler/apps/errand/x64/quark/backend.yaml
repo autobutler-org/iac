@@ -1,9 +1,9 @@
-# quark-x64-backend scale set. runs-on label quark-x64-backend, group errand.
+# x64-quark-backend scale set. runs-on label x64-quark-backend, group errand.
 # Values stay outside apps/ so this directory sync does not apply them as manifests.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: quark-x64-backend
+  name: x64-quark-backend
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "3"
@@ -14,7 +14,7 @@ spec:
       chart: gha-runner-scale-set
       targetRevision: 0.15.1
       helm:
-        releaseName: quark-x64-backend
+        releaseName: x64-quark-backend
         valueFiles:
           - $values/gitops/autobutler/errand/x64/quark/backend.yaml
     - repoURL: https://github.com/autobutler-org/iac.git

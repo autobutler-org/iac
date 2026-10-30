@@ -1,6 +1,6 @@
 githubConfigUrl: https://github.com/autobutler-org
 githubConfigSecret: github-app-private-key
-runnerScaleSetName: quark-x64-full
+runnerScaleSetName: x64-quark-full
 # Jobs on this label use container:
 # autobutlerci.azurecr.io/quark/ci-full:latest.
 # Organization runner group errand. Create it before this scale set syncs.
