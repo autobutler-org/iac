@@ -1,0 +1,66 @@
+githubConfigUrl: https://github.com/autobutler-org
+githubConfigSecret: github-app-private-key
+runnerScaleSetName: x64-medium-quark-full
+# Jobs on this label run in autobutlerci.azurecr.io/quark/ci-full:latest.
+# Organization runner group errand. Create it before this scale set syncs.
+# It is not the Default group, so a job names the group and this label.
+runnerGroup: errand
+# Argo renders with helm template, and that lookup cannot see the controller
+# Deployment even when the label is present. Set both fields. The name helper
+# and the namespace helper each call lookup when their own field is empty.
+controllerServiceAccount:
+  name: errand-controller-gha-rs-controller
+  namespace: ci-runners
+minRunners: 0
+maxRunners: 100
+containerMode:
+  type: dind
+# The listener is one pod for the scale set. It belongs on the system node.
+listenerTemplate:
+  spec:
+    # The container name must be listener. The controller merges this into
+    # the default listener container. The CRD still requires a container.
+    containers:
+      - name: listener
+        image: ghcr.io/actions/gha-runner-scale-set-controller:0.15.1
+    tolerations:
+      - key: CriticalAddonsOnly
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
+template:
+  spec:
+    nodeSelector:
+      kubernetes.io/arch: amd64
+      ci.autobutler.org/runner: "true"
+    tolerations:
+      - key: ci.autobutler.org/runner
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
+    volumes:
+      - name: acr-login
+        configMap:
+          name: acr-login
+          defaultMode: 0755
+    containers:
+      - name: runner
+        # The label's default job image. It carries the Actions runner, so a
+        # job on this label runs in it without naming container:. The kubelet
+        # pulls it with the Container Registry Repository Reader assignment.
+        image: autobutlerci.azurecr.io/quark/ci-full:latest
+        imagePullPolicy: Always
+        command: ["/home/runner/run.sh"]
+        # medium size: half the 3500m / 10Gi node limit; each size doubles the last.
+        # AKS and the daemonsets keep some of the node, so this is the most a
+        # pod can get and still schedule. Requests default to limits.
+        resources:
+          limits:
+            cpu: 1750m
+            memory: 5Gi
+        env:
+          - name: ACTIONS_RUNNER_HOOK_JOB_STARTED
+            value: /home/runner/hooks/acr-login.sh
+        volumeMounts:
+          - name: acr-login
+            mountPath: /home/runner/hooks
