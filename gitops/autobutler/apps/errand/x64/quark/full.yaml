@@ -5,6 +5,10 @@ kind: Application
 metadata:
   name: x64-quark-full
   namespace: argocd
+  # Deleting this Application also deletes what it installed. Without the
+  # finalizer the scale set is orphaned and keeps running.
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
   annotations:
     argocd.argoproj.io/sync-wave: "3"
 spec:
