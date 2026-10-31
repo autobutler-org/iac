@@ -66,20 +66,23 @@ resource "azurerm_kubernetes_cluster" "this" {
     dns_service_ip      = "10.245.0.10"
   }
 
-  # One node, always on. It runs cluster addons and, later, Argo CD and External
-  # Secrets. It does not run CI jobs: the runner pool is tainted, so those pods cannot
-  # land here. only_critical_addons_enabled stays off, because turning it on would leave
-  # Argo and External Secrets with nowhere to schedule.
+  # One node, always on. It runs AKS addons, Argo CD, and External Secrets.
+  # CriticalAddonsOnly keeps every other pod off it, including CI jobs. Argo and
+  # External Secrets tolerate that taint in ci-gitops.tf. Changing the flag cycles
+  # this pool, so it needs a temporary name. Dsv6 quota is 10 and this node is 2,
+  # which leaves room for the temporary node.
   default_node_pool {
     name = "system"
     # DSv5 quota in this subscription cannot be raised. Dsv6 already has room for
     # this one 2-vCPU node.
-    vm_size         = "Standard_D2s_v6"
-    node_count      = 1
-    os_disk_size_gb = 32
-    os_disk_type    = "Managed"
-    vnet_subnet_id  = azurerm_subnet.nodes.id
-    tags            = var.tags
+    vm_size                      = "Standard_D2s_v6"
+    node_count                   = 1
+    os_disk_size_gb              = 32
+    os_disk_type                 = "Managed"
+    vnet_subnet_id               = azurerm_subnet.nodes.id
+    only_critical_addons_enabled = true
+    temporary_name_for_rotation  = "systemtmp"
+    tags                         = var.tags
 
     # AKS writes these on create. Leaving the block unset plans them back to null.
     upgrade_settings {
@@ -105,24 +108,25 @@ resource "azurerm_kubernetes_cluster" "this" {
 }
 
 # Two runner pools, one per architecture. Each machine is 4 real cores and 16 GiB.
-# Ddsv6 vCPUs are hyperthreads, so the x64 pool is Fasv6 (SMT off) and the Arm pool is
-# Cobalt, one core per vCPU.
+# Ddsv6 vCPUs are hyperthreads, so the x64 pool is Fadsv7 (SMT off, Turin) and the
+# Arm pool is Cobalt, one core per vCPU.
 #
 # The Arm pool starts at 2 nodes and the autoscaler may add nodes up to 100, which is
 # the concurrency target (100 jobs, 400 vCPUs). Two nodes are 8 vCPUs. The Dpdsv6 family
 # quota is 10, so a third node (12 vCPUs) cannot be created until that quota is raised.
 # The x64 pool starts empty and uses the same ceiling, for the jobs that have to build
-# on x64. Two is the Arm floor, not two of each.
+# on x64. Two is the Arm floor, not two of each. Fadsv7 quota is also 10.
 #
 # No node_count. With autoscaling the provider uses min_count as the initial count.
 #
-# D4pds_v6 has one NVMe and no SCSI resource disk, same shape as the other v6 "d" sizes,
-# so the Arm OS disk is ephemeral and consumes that NVMe. F4as_v6 has no local disk, so
-# its OS disk is managed.
+# Both sizes have one NVMe and no separate SCSI resource disk. The OS disk is
+# ephemeral and consumes that NVMe, so job scratch is local. Changing the x64 size
+# or disk type cycles that pool, so it needs a temporary name.
 #
-# The taint keeps system pods on the system pool. A runner pod selects
-# kubernetes.io/arch. Both pools carry the same taint, so an unselected pod is
-# unschedulable rather than landing on the wrong architecture.
+# Runner pods select kubernetes.io/arch and ci.autobutler.org/runner. Both pools
+# carry the runner taint, so an unselected pod is unschedulable rather than landing
+# on the wrong architecture. The system pool's CriticalAddonsOnly taint is what
+# keeps a runner off the system node.
 #
 # Trusted Launch, vTPM, and secure boot stay off. A later guest-kernel mode for
 # untrusted jobs requires Trusted Launch to have been left off, and azurerm has no
@@ -165,16 +169,24 @@ resource "azurerm_kubernetes_cluster_node_pool" "arm" {
 resource "azurerm_kubernetes_cluster_node_pool" "x64" {
   name                  = "x64"
   kubernetes_cluster_id = azurerm_kubernetes_cluster.this.id
-  vm_size               = "Standard_F4as_v6"
+  vm_size               = "Standard_F4ads_v7"
   mode                  = "User"
   vnet_subnet_id        = azurerm_subnet.nodes.id
 
   auto_scaling_enabled = true
   min_count            = 0
-  max_count            = 100
+  # 50, not 100, while this pool rotates onto F4ads_v7. Azure counts every
+  # pool's max_count against the pod CIDR, 256 addresses per node. The arm
+  # pool, the current x64 pool, the temporary x64 pool, and the system node
+  # at max 100 are 77056 addresses, and 10.244.0.0/16 holds 65536. 50 keeps
+  # that rotation under the CIDR. Raise this back to 100 after x64temp is gone.
+  # Steady state at 100 fits. Fadsv7 quota is 10 vCPUs either way.
+  max_count = 50
 
-  os_disk_type    = "Managed"
-  os_disk_size_gb = 128
+  # 128 GiB fits in the 440 GiB NVMe. Ephemeral placement uses that disk.
+  os_disk_type                = "Ephemeral"
+  os_disk_size_gb             = 128
+  temporary_name_for_rotation = "x64temp"
 
   # AKS writes these on create. Leaving the block unset plans them back to null.
   upgrade_settings {

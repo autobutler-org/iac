@@ -51,6 +51,19 @@ resource "azurerm_key_vault_access_policy" "ci_gitops" {
   ]
 }
 
+# The system pool is tainted CriticalAddonsOnly. These two releases are the
+# non-addon pods that still belong there.
+locals {
+  system_tolerations = [
+    {
+      key      = "CriticalAddonsOnly"
+      operator = "Equal"
+      value    = "true"
+      effect   = "NoSchedule"
+    },
+  ]
+}
+
 resource "helm_release" "external_secrets" {
   name             = "external-secrets"
   repository       = "https://charts.external-secrets.io"
@@ -72,6 +85,16 @@ resource "helm_release" "external_secrets" {
       # even if the webhook does not.
       podLabels = {
         "azure.workload.identity/use" = "true"
+      }
+      global = {
+        tolerations = local.system_tolerations
+      }
+      tolerations = local.system_tolerations
+      webhook = {
+        tolerations = local.system_tolerations
+      }
+      certController = {
+        tolerations = local.system_tolerations
       }
     }),
   ]
@@ -98,6 +121,9 @@ resource "helm_release" "argo_cd" {
 
   values = [
     yamlencode({
+      global = {
+        tolerations = local.system_tolerations
+      }
       server = {
         service = {
           type = "LoadBalancer"
