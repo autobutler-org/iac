@@ -1,7 +1,10 @@
 githubConfigUrl: https://github.com/autobutler-org
 githubConfigSecret: github-app-private-key
-runnerScaleSetName: errand-x64
-# Same group as the Arm set. Both labels live here, not in Default.
+runnerScaleSetName: arm-quark-backend
+# Jobs on this label use container:
+# autobutlerci.azurecr.io/quark/ci-backend:latest.
+# Organization runner group errand. Create it before this scale set syncs.
+# It is not the Default group, so a job names the group and this label.
 runnerGroup: errand
 # Argo renders with helm template, and that lookup cannot see the controller
 # Deployment even when the label is present. Set both fields. The name helper
@@ -29,7 +32,7 @@ listenerTemplate:
 template:
   spec:
     nodeSelector:
-      kubernetes.io/arch: amd64
+      kubernetes.io/arch: arm64
       ci.autobutler.org/runner: "true"
     tolerations:
       - key: ci.autobutler.org/runner
@@ -43,8 +46,9 @@ template:
           defaultMode: 0755
     containers:
       - name: runner
-        # Public image. The kubelet can pull it. A job's container: image is pulled
-        # by Docker after the ACR login hook, not by this pod.
+        # Public image. The kubelet can pull it, and it contains
+        # /home/runner/run.sh. ci-backend and ci-frontend do not. Docker
+        # pulls the job's container: image after the ACR login hook.
         image: ghcr.io/actions/actions-runner:2.338.2
         command: ["/home/runner/run.sh"]
         env:
