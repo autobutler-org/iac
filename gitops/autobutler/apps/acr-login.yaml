@@ -13,9 +13,19 @@ data:
     #!/bin/bash
     set -euo pipefail
     url="http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://containerregistry.azure.net&client_id=be8a4c5c-917e-4301-a082-40e131d849dc"
-    token=$(curl -fsS --max-time 5 -H Metadata:true "$url" | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')
-    if [ -z "$token" ]; then
+    aad=$(curl -fsS --max-time 5 -H Metadata:true "$url" | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')
+    if [ -z "$aad" ]; then
       echo "ACR login failed: IMDS did not return a token" >&2
+      exit 1
+    fi
+    # The registry rejects an Entra token as a password. Trade it for an ACR
+    # refresh token first, the way az acr login does.
+    token=$(curl -fsS --max-time 10 -X POST https://autobutlerci.azurecr.io/oauth2/exchange \
+      --data-urlencode grant_type=access_token \
+      --data-urlencode service=autobutlerci.azurecr.io \
+      --data-urlencode "access_token=$aad" | sed -n 's/.*"refresh_token":"\([^"]*\)".*/\1/p')
+    if [ -z "$token" ]; then
+      echo "ACR login failed: the registry did not exchange the IMDS token" >&2
       exit 1
     fi
     printf '%s' "$token" | docker login autobutlerci.azurecr.io --username 00000000-0000-0000-0000-000000000000 --password-stdin
