@@ -60,7 +60,20 @@ into `autobutlerci.azurecr.io` as well, for a job that pulls from the registry.
 Every runner pod has a limit of 3500m CPU and 10Gi memory, which is as much as a
 4 vCPU, 16 GiB node leaves after AKS reserves and daemonsets. That is the
 GitHub-hosted size. Requests default to the limit, so it is one pod per node.
-Later, a label may select a smaller size, each its own scale set.
+
+Each label also has `small`, `medium` and `large` variants. The size goes after
+the architecture and before the app: `arm-small`, `x64-medium-quark-backend`,
+`arm-large-quark-full`. Each is its own scale set, with values under
+`errand/<arch>/<size>/` and its Application under `apps/errand/<arch>/<size>/`.
+Each size doubles the last, and the unsized label keeps the full limit:
+
+| Size | CPU limit | Memory limit |
+| --- | --- | --- |
+| `small` | 875m | 2.5Gi |
+| `medium` | 1750m | 5Gi |
+| `large` | 3500m | 10Gi |
+
+`large` matches the unsized label. 4 cores would not schedule on these nodes.
 
 ```yaml
 runs-on:
@@ -72,7 +85,7 @@ runs-on:
 `quark/ci-full`. The x64 labels are `x64-quark-backend`, `x64-quark-frontend`,
 and `x64-quark-full`. The Application for each set lives under
 `gitops/autobutler/apps/errand/`, in the same `arm/` and `x64/` layout as the
-values. All eight sets belong to the organization runner group `errand`, not Default. Create that group before the
+values. All thirty-two sets belong to the organization runner group `errand`, not Default. Create that group before the
 scale sets sync. Give it private-repository visibility and do not allow public
 repositories. Privileged Docker-in-Docker on a public repository accepts jobs
 from fork pull requests.
