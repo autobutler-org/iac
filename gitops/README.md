@@ -57,6 +57,10 @@ naming `container:`. Every Quark image carries the Actions runner and
 Repository Reader assignment. Before each job the ACR login hook logs Docker
 into `autobutlerci.azurecr.io` as well, for a job that pulls from the registry.
 
+Later, a label will select a runner size, small, medium, or large, and each size
+will be its own scale set with its own CPU and memory request. Until that is
+asked for, both pools are the current 4-core size.
+
 ```yaml
 runs-on:
   group: errand
