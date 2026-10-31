@@ -56,7 +56,7 @@ template:
         resources:
           limits:
             cpu: 3500m
-            memory: 13Gi
+            memory: 10Gi
         env:
           - name: ACTIONS_RUNNER_HOOK_JOB_STARTED
             value: /home/runner/hooks/acr-login.sh
