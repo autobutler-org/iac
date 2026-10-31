@@ -175,13 +175,12 @@ resource "azurerm_kubernetes_cluster_node_pool" "x64" {
 
   auto_scaling_enabled = true
   min_count            = 0
-  # 50, not 100, while this pool rotates onto F4ads_v7. Azure counts every
-  # pool's max_count against the pod CIDR, 256 addresses per node. The arm
-  # pool, the current x64 pool, the temporary x64 pool, and the system node
-  # at max 100 are 77056 addresses, and 10.244.0.0/16 holds 65536. 50 keeps
-  # that rotation under the CIDR. Raise this back to 100 after x64temp is gone.
-  # Steady state at 100 fits. Fadsv7 quota is 10 vCPUs either way.
-  max_count = 50
+  # Azure counts every pool's max_count against the pod CIDR, 256 addresses
+  # per node. Steady state is 201 nodes, 51456 addresses, inside the 65536 of
+  # 10.244.0.0/16. A rotation adds x64temp at the same max, 77056 addresses,
+  # which does not fit. Before changing the size or disk type, drop this to 50,
+  # apply, rotate, then raise it back.
+  max_count = 100
 
   # 128 GiB fits in the 440 GiB NVMe. Ephemeral placement uses that disk.
   os_disk_type                = "Ephemeral"

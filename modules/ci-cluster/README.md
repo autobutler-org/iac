@@ -13,9 +13,10 @@ the quota for it cannot be raised in this subscription.
 Runner nodes are 4 cores and 16 GiB, and both OS disks are ephemeral on NVMe. The
 Arm pool (`Standard_D4pds_v6`) starts at 2 nodes and the autoscaler may grow it to
 100. Two nodes are 8 vCPUs, which fits the current Dpdsv6 quota of 10. A third node
-does not. The x64 pool (`Standard_F4ads_v7`) starts at 0. Its max is 50 while the
-pool rotates, because the temporary pool is also counted against the pod
-CIDR. Fadsv7 quota is 10 either way. 100 is the concurrency target, not a count we provision now.
+does not. The x64 pool (`Standard_F4ads_v7`) starts at 0 and may also grow to 100.
+Fadsv7 quota is 10 either way. 100 is the concurrency target, not a count we provision now.
+Rotating the x64 pool needs its max dropped to 50 first. The temporary pool counts
+against the pod CIDR too, and at 100 the two pools do not fit.
 Both pools are tainted `ci.autobutler.org/runner=true:NoSchedule`. A runner pod
 selects `kubernetes.io/arch` and `ci.autobutler.org/runner`. The system pool is
 tainted `CriticalAddonsOnly=true:NoSchedule`. Argo CD and External Secrets tolerate
