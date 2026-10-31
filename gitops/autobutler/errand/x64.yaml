@@ -43,10 +43,9 @@ template:
           defaultMode: 0755
     containers:
       - name: runner
-        # Default job environment. Always, so a new pod takes the tag main last pushed.
-        # Smaller jobs set container: to ci-backend or ci-frontend.
-        image: autobutlerci.azurecr.io/quark/ci-full:latest
-        imagePullPolicy: Always
+        # Public image. The kubelet can pull it. A job's container: image is pulled
+        # by Docker after the ACR login hook, not by this pod.
+        image: ghcr.io/actions/actions-runner:2.338.2
         command: ["/home/runner/run.sh"]
         env:
           - name: ACTIONS_RUNNER_HOOK_JOB_STARTED
