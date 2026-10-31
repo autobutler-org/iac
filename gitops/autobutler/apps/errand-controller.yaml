@@ -5,6 +5,10 @@ kind: Application
 metadata:
   name: errand-controller
   namespace: argocd
+  # Deleting this Application also deletes what it installed. Without the
+  # finalizer the scale set is orphaned and keeps running.
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
   annotations:
     argocd.argoproj.io/sync-wave: "2"
 spec:
