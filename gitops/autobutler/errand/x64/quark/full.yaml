@@ -1,8 +1,7 @@
 githubConfigUrl: https://github.com/autobutler-org
 githubConfigSecret: github-app-private-key
 runnerScaleSetName: x64-quark-full
-# Jobs on this label use container:
-# autobutlerci.azurecr.io/quark/ci-full:latest.
+# Jobs on this label run in autobutlerci.azurecr.io/quark/ci-full:latest.
 # Organization runner group errand. Create it before this scale set syncs.
 # It is not the Default group, so a job names the group and this label.
 runnerGroup: errand
@@ -46,10 +45,11 @@ template:
           defaultMode: 0755
     containers:
       - name: runner
-        # Public image. The kubelet can pull it, and it contains
-        # /home/runner/run.sh. ci-backend and ci-frontend do not. Docker
-        # pulls the job's container: image after the ACR login hook.
-        image: ghcr.io/actions/actions-runner:2.338.2
+        # The label's default job image. It carries the Actions runner, so a
+        # job on this label runs in it without naming container:. The kubelet
+        # pulls it with the Container Registry Repository Reader assignment.
+        image: autobutlerci.azurecr.io/quark/ci-full:latest
+        imagePullPolicy: Always
         command: ["/home/runner/run.sh"]
         env:
           - name: ACTIONS_RUNNER_HOOK_JOB_STARTED

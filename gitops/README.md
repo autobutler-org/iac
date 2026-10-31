@@ -49,24 +49,23 @@ directory sync does not apply them as manifests. Each set pins
 controller Deployment, and chart 0.15.1 fails closed unless both the name and
 the namespace are set. Every set uses privileged Docker-in-Docker.
 
-The pod image is `ghcr.io/actions/actions-runner:2.338.2` on every set. That
-image contains `/home/runner/run.sh`. `ci-backend` and `ci-frontend` do not, so
-they cannot be the pod. The kubelet pulls the pod image before the ACR login
-hook. Before each job the runner logs into `autobutlerci.azurecr.io`, and
-Docker then pulls the image named by `container:`.
+`arm` and `x64` run `ghcr.io/actions/actions-runner:2.338.2`. Each Quark set
+runs its job image as the pod, `autobutlerci.azurecr.io/quark/ci-<kind>:latest`
+with `imagePullPolicy: Always`, so a job on that label runs in the image without
+naming `container:`. Every Quark image carries the Actions runner and
+`/home/runner/run.sh`. The kubelet pulls it with its Container Registry
+Repository Reader assignment. Before each job the ACR login hook logs Docker
+into `autobutlerci.azurecr.io` as well, for a job that pulls from the registry.
 
 ```yaml
 runs-on:
   group: errand
   labels: arm-quark-backend
-container:
-  image: autobutlerci.azurecr.io/quark/ci-backend:latest
 ```
 
-`arm-quark-frontend` uses `quark/ci-frontend`, and `arm-quark-full` uses
+`arm-quark-frontend` runs `quark/ci-frontend`, and `arm-quark-full` runs
 `quark/ci-full`. The x64 labels are `x64-quark-backend`, `x64-quark-frontend`,
-and `x64-quark-full`. `arm` and `x64` are the GitHub runner image, with no
-required `container:`. The Application for each set lives under
+and `x64-quark-full`. The Application for each set lives under
 `gitops/autobutler/apps/errand/`, in the same `arm/` and `x64/` layout as the
 values. All eight sets belong to the organization runner group `errand`, not Default. Create that group before the
 scale sets sync. Give it private-repository visibility and do not allow public
