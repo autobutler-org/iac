@@ -51,6 +51,13 @@ template:
         image: autobutlerci.azurecr.io/quark/ci-backend:latest
         imagePullPolicy: Always
         command: ["/home/runner/run.sh"]
+        # One pod per 4 vCPU / 16 GiB node, matching GitHub-hosted runners.
+        # AKS and the daemonsets keep some of the node, so this is the most a
+        # pod can get and still schedule. Requests default to limits.
+        resources:
+          limits:
+            cpu: 3500m
+            memory: 13Gi
         env:
           - name: ACTIONS_RUNNER_HOOK_JOB_STARTED
             value: /home/runner/hooks/acr-login.sh

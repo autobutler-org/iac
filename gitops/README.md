@@ -57,9 +57,10 @@ naming `container:`. Every Quark image carries the Actions runner and
 Repository Reader assignment. Before each job the ACR login hook logs Docker
 into `autobutlerci.azurecr.io` as well, for a job that pulls from the registry.
 
-Later, a label will select a runner size, small, medium, or large, and each size
-will be its own scale set with its own CPU and memory request. Until that is
-asked for, both pools are the current 4-core size.
+Every runner pod has a limit of 3500m CPU and 13Gi memory, which is as much as a
+4 vCPU, 16 GiB node leaves after AKS reserves and daemonsets. That is the
+GitHub-hosted size. Requests default to the limit, so it is one pod per node.
+Later, a label may select a smaller size, each its own scale set.
 
 ```yaml
 runs-on:
