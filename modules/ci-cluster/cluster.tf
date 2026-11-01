@@ -111,11 +111,11 @@ resource "azurerm_kubernetes_cluster" "this" {
 # Ddsv6 vCPUs are hyperthreads, so the x64 pool is Fadsv7 (SMT off, Turin) and the
 # Arm pool is Cobalt, one core per vCPU.
 #
-# The Arm pool starts at 2 nodes and the autoscaler may add nodes up to 100, which is
-# the concurrency target (100 jobs, 400 vCPUs). Two nodes are 8 vCPUs. The Dpdsv6 family
-# quota is 10, so a third node (12 vCPUs) cannot be created until that quota is raised.
-# The x64 pool starts empty and uses the same ceiling, for the jobs that have to build
-# on x64. Two is the Arm floor, not two of each. Fadsv7 quota is also 10.
+# The Arm pool starts at 2 nodes and the x64 pool starts empty. Each is capped at 2
+# nodes, 8 vCPUs, because the Dpdsv6 and Fadsv7 family quotas are 10 vCPUs each. Azure
+# rejects a whole scale-up that would pass the quota, so a higher max_count leaves the
+# pool stuck at its current size instead of adding the nodes that fit. Raise each max
+# toward 100, the concurrency target (100 jobs, 400 vCPUs), once its quota is raised.
 #
 # No node_count. With autoscaling the provider uses min_count as the initial count.
 #
@@ -143,7 +143,7 @@ resource "azurerm_kubernetes_cluster_node_pool" "arm" {
 
   auto_scaling_enabled = true
   min_count            = 2
-  max_count            = 100
+  max_count            = 2
 
   os_disk_type    = "Ephemeral"
   os_disk_size_gb = 128
@@ -176,11 +176,11 @@ resource "azurerm_kubernetes_cluster_node_pool" "x64" {
   auto_scaling_enabled = true
   min_count            = 0
   # Azure counts every pool's max_count against the pod CIDR, 256 addresses
-  # per node. Steady state is 201 nodes, 51456 addresses, inside the 65536 of
-  # 10.244.0.0/16. A rotation adds x64temp at the same max, 77056 addresses,
-  # which does not fit. Before changing the size or disk type, drop this to 50,
-  # apply, rotate, then raise it back.
-  max_count = 100
+  # per node. At 100 per pool, steady state is 201 nodes, 51456 addresses,
+  # inside the 65536 of 10.244.0.0/16. A rotation adds x64temp at the same max,
+  # 77056 addresses, which does not fit. At 100, before changing the size or
+  # disk type, drop this to 50, apply, rotate, then raise it back.
+  max_count = 2
 
   # 128 GiB fits in the 440 GiB NVMe. Ephemeral placement uses that disk.
   os_disk_type                = "Ephemeral"
