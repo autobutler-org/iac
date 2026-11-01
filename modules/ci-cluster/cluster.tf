@@ -174,13 +174,8 @@ resource "azurerm_kubernetes_cluster_node_pool" "x64" {
   vnet_subnet_id        = azurerm_subnet.nodes.id
 
   auto_scaling_enabled = true
-  min_count            = 0
-  # Azure counts every pool's max_count against the pod CIDR, 256 addresses
-  # per node. At 100 per pool, steady state is 201 nodes, 51456 addresses,
-  # inside the 65536 of 10.244.0.0/16. A rotation adds x64temp at the same max,
-  # 77056 addresses, which does not fit. At 100, before changing the size or
-  # disk type, drop this to 50, apply, rotate, then raise it back.
-  max_count = 2
+  min_count            = 2
+  max_count            = 2
 
   # 128 GiB fits in the 440 GiB NVMe. Ephemeral placement uses that disk.
   os_disk_type                = "Ephemeral"
