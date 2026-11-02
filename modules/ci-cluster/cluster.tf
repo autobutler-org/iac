@@ -111,7 +111,10 @@ resource "azurerm_kubernetes_cluster" "this" {
 # Ddsv6 vCPUs are hyperthreads, so the x64 pool is Fadsv7 (SMT off, Turin) and the
 # Arm pool is Cobalt, one core per vCPU.
 #
-# The Arm pool starts at 2 nodes and the x64 pool starts empty. Each is capped at 2
+# Both pools start empty and scale from 0. CI runs on GitHub-hosted runners until the
+# quotas are raised (quark AGENTS.md, CI images), so idle nodes would only cost money.
+# Raise min_count again when jobs move back, so runners start without a node boot.
+# Each is capped at 2
 # nodes, 8 vCPUs, because the Dpdsv6 and Fadsv7 family quotas are 10 vCPUs each. Azure
 # rejects a whole scale-up that would pass the quota, so a higher max_count leaves the
 # pool stuck at its current size instead of adding the nodes that fit. Raise each max
@@ -142,7 +145,7 @@ resource "azurerm_kubernetes_cluster_node_pool" "arm" {
   vnet_subnet_id        = azurerm_subnet.nodes.id
 
   auto_scaling_enabled = true
-  min_count            = 2
+  min_count            = 0
   max_count            = 2
 
   os_disk_type    = "Ephemeral"
@@ -174,7 +177,7 @@ resource "azurerm_kubernetes_cluster_node_pool" "x64" {
   vnet_subnet_id        = azurerm_subnet.nodes.id
 
   auto_scaling_enabled = true
-  min_count            = 2
+  min_count            = 0
   max_count            = 2
 
   # 128 GiB fits in the 440 GiB NVMe. Ephemeral placement uses that disk.
