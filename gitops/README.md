@@ -60,6 +60,9 @@ into `autobutlerci.azurecr.io` as well, for a job that pulls from the registry.
 Every runner pod has a limit of 3500m CPU and 10Gi memory, which is as much as a
 4 vCPU, 16 GiB node leaves after AKS reserves and daemonsets. That is the
 GitHub-hosted size. Requests default to the limit, so it is one pod per node.
+The limit is on the pod (`template.spec.resources`), not on the runner
+container, so the runner and the dind sidecar share it. A Docker build runs in
+dind, and a container limit left dind unbounded and uncounted by the scheduler.
 
 Each label also has `small`, `medium` and `large` variants. The size goes after
 the architecture and before the app: `arm-small`, `x64-medium-quark-backend`,
