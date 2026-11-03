@@ -1,0 +1,45 @@
+# Errand: the ARC controller and every runner scale set, from one chart. Each
+# runner registers as errand-<label>, in group errand.
+# Values stay outside apps/ so this directory sync does not apply them as manifests.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: errand
+  namespace: argocd
+  # Deleting this Application also deletes what it installed. Without the
+  # finalizer the scale sets are orphaned and keep running.
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    # After acr-login and github-app (wave 1). Wave 4, not 2, so that when this
+    # replaced errand-controller (wave 2) and the gha-runner-scale-set
+    # Applications (wave 3), Argo pruned those, in reverse wave order and
+    # waiting for each deletion, before it created this one. Two controllers
+    # must never run together.
+    argocd.argoproj.io/sync-wave: "4"
+spec:
+  project: default
+  sources:
+    - repoURL: ghcr.io/autobutler-org/charts
+      chart: errand
+      targetRevision: 0.1.0
+      helm:
+        releaseName: errand
+        valueFiles:
+          - $values/gitops/autobutler/errand/values.yaml
+    - repoURL: https://github.com/autobutler-org/iac.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ci-runners
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      # The scale-set CRDs are larger than the kubectl last-applied-configuration
+      # annotation. Client-side apply rejects them. Server-side apply does not
+      # write that annotation.
+      - ServerSideApply=true

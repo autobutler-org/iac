@@ -1,0 +1,94 @@
+# Values for the Errand chart, oci://ghcr.io/autobutler-org/charts/errand.
+# https://github.com/autobutler-org/errand/blob/main/charts/errand/values.yaml
+# Every runner is defaults deep-merged with its entry: maps merge key by key,
+# lists and scalars replace. The chart names each scale set, and so its runs-on
+# label, errand-<label>.
+
+gha-runner-scale-set-controller:
+  # The controller and every listener belong on the system node.
+  tolerations: &system
+    - key: CriticalAddonsOnly
+      operator: Equal
+      value: "true"
+      effect: NoSchedule
+
+github:
+  configUrl: https://github.com/autobutler-org
+  secret: github-app-private-key
+  # Organization runner group errand, not Default. Create it before this syncs,
+  # with private-repository visibility: privileged Docker-in-Docker on a public
+  # repository accepts jobs from fork pull requests.
+  runnerGroup: errand
+
+defaults:
+  # The chart's defaults: ghcr.io/actions/actions-runner:2.338.2, minRunners 0,
+  # maxRunners 100, dind, and 3500m / 10Gi on the pod, which is as much as a
+  # 4 vCPU / 16 GiB node leaves after AKS and the daemonsets. Requests default
+  # to limits, so an unsized or large runner is one pod per node.
+  pod:
+    nodeSelector:
+      ci.autobutler.org/runner: "true"
+    tolerations:
+      - key: ci.autobutler.org/runner
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
+    volumes:
+      - name: acr-login
+        configMap:
+          name: acr-login
+          defaultMode: 0755
+  container:
+    # Logs Docker into autobutlerci.azurecr.io before each job.
+    env:
+      - name: ACTIONS_RUNNER_HOOK_JOB_STARTED
+        value: /home/runner/hooks/acr-login.sh
+    volumeMounts:
+      - name: acr-login
+        mountPath: /home/runner/hooks
+  listener:
+    tolerations: *system
+
+# Labels are <arch>[-<size>][-quark-<kind>]. small and medium are a quarter and
+# a half of the node; large is the same as unsized.
+#
+# arm and x64 run GitHub's runner image. Each quark label runs its job image as
+# the runner pod, so a job on it needs no container:. Those images carry the
+# Actions runner and /home/runner/run.sh, and the kubelet pulls them, on every
+# pod, with its Container Registry Repository Reader assignment.
+runners:
+  - { label: arm, arch: arm64 }
+  - { label: arm-small, arch: arm64, resources: &small { limits: { cpu: 875m, memory: 2.5Gi } } }
+  - { label: arm-medium, arch: arm64, resources: &medium { limits: { cpu: 1750m, memory: 5Gi } } }
+  - { label: arm-large, arch: arm64 }
+  - { label: x64, arch: amd64 }
+  - { label: x64-small, arch: amd64, resources: *small }
+  - { label: x64-medium, arch: amd64, resources: *medium }
+  - { label: x64-large, arch: amd64 }
+
+  - { label: arm-quark-backend, arch: arm64, image: &backend autobutlerci.azurecr.io/quark/ci-backend:latest, container: &pull { imagePullPolicy: Always } }
+  - { label: arm-small-quark-backend, arch: arm64, image: *backend, container: *pull, resources: *small }
+  - { label: arm-medium-quark-backend, arch: arm64, image: *backend, container: *pull, resources: *medium }
+  - { label: arm-large-quark-backend, arch: arm64, image: *backend, container: *pull }
+  - { label: x64-quark-backend, arch: amd64, image: *backend, container: *pull }
+  - { label: x64-small-quark-backend, arch: amd64, image: *backend, container: *pull, resources: *small }
+  - { label: x64-medium-quark-backend, arch: amd64, image: *backend, container: *pull, resources: *medium }
+  - { label: x64-large-quark-backend, arch: amd64, image: *backend, container: *pull }
+
+  - { label: arm-quark-frontend, arch: arm64, image: &frontend autobutlerci.azurecr.io/quark/ci-frontend:latest, container: *pull }
+  - { label: arm-small-quark-frontend, arch: arm64, image: *frontend, container: *pull, resources: *small }
+  - { label: arm-medium-quark-frontend, arch: arm64, image: *frontend, container: *pull, resources: *medium }
+  - { label: arm-large-quark-frontend, arch: arm64, image: *frontend, container: *pull }
+  - { label: x64-quark-frontend, arch: amd64, image: *frontend, container: *pull }
+  - { label: x64-small-quark-frontend, arch: amd64, image: *frontend, container: *pull, resources: *small }
+  - { label: x64-medium-quark-frontend, arch: amd64, image: *frontend, container: *pull, resources: *medium }
+  - { label: x64-large-quark-frontend, arch: amd64, image: *frontend, container: *pull }
+
+  - { label: arm-quark-full, arch: arm64, image: &full autobutlerci.azurecr.io/quark/ci-full:latest, container: *pull }
+  - { label: arm-small-quark-full, arch: arm64, image: *full, container: *pull, resources: *small }
+  - { label: arm-medium-quark-full, arch: arm64, image: *full, container: *pull, resources: *medium }
+  - { label: arm-large-quark-full, arch: arm64, image: *full, container: *pull }
+  - { label: x64-quark-full, arch: amd64, image: *full, container: *pull }
+  - { label: x64-small-quark-full, arch: amd64, image: *full, container: *pull, resources: *small }
+  - { label: x64-medium-quark-full, arch: amd64, image: *full, container: *pull, resources: *medium }
+  - { label: x64-large-quark-full, arch: amd64, image: *full, container: *pull }

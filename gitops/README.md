@@ -2,8 +2,8 @@
 
 Terraform installs Argo CD and External Secrets once, from
 `azure/autobutler/ci-gitops.tf`. Argo then applies whatever is under
-`gitops/autobutler/apps` on `main`. There is no Errand chart in this repo or in
-another one. The runner scale sets are GitHub's charts, with our values beside `apps/`.
+`gitops/autobutler/apps` on `main`. The runners come from the Errand chart, which lives in
+[autobutler-org/errand](https://github.com/autobutler-org/errand), with our values beside `apps/`.
 
 ## Repository credential
 
@@ -25,50 +25,41 @@ Terraform never holds the value. After the App exists, set its private key in
 
 ## Runners
 
-There is no Errand chart. Argo installs GitHub's charts from
-`ghcr.io/actions/actions-runner-controller-charts` at version 0.15.1.
+`apps/errand.yaml` is one Argo Application for the Errand chart,
+`oci://ghcr.io/autobutler-org/charts/errand` at 0.1.0. The chart installs the Actions Runner
+Controller (`gha-runner-scale-set-controller` 0.15.1, named `errand-controller`) and one runner
+scale set per entry under `runners:` in `errand/values.yaml`. The values file sits outside `apps/`
+so the directory sync does not apply it as a manifest. The chart's CRDs need server-side apply.
 
-| Application | Values | `runs-on` label | Job image |
-| --- | --- | --- | --- |
-| `errand-controller` | | | |
-| `arm` | `errand/arm/arm.yaml` | `arm` | GitHub runner |
-| `arm-quark-backend` | `errand/arm/quark/backend.yaml` | `arm-quark-backend` | `quark/ci-backend` |
-| `arm-quark-frontend` | `errand/arm/quark/frontend.yaml` | `arm-quark-frontend` | `quark/ci-frontend` |
-| `arm-quark-full` | `errand/arm/quark/full.yaml` | `arm-quark-full` | `quark/ci-full` |
-| `x64` | `errand/x64/x64.yaml` | `x64` | GitHub runner |
-| `x64-quark-backend` | `errand/x64/quark/backend.yaml` | `x64-quark-backend` | `quark/ci-backend` |
-| `x64-quark-frontend` | `errand/x64/quark/frontend.yaml` | `x64-quark-frontend` | `quark/ci-frontend` |
-| `x64-quark-full` | `errand/x64/quark/full.yaml` | `x64-quark-full` | `quark/ci-full` |
+Each entry's `label` becomes the scale set `errand-<label>`, and that is its `runs-on` label. There
+are thirty-two: `<arch>[-<size>][-quark-<kind>]`, with `arm` or `x64`, an optional `small`,
+`medium` or `large`, and an optional `backend`, `frontend` or `full`. Every runner starts from
+`defaults` and the entry layers its own fields on top. Every set uses privileged Docker-in-Docker.
 
-One Application is one Helm release, and one release registers one label.
-`runnerScaleSetName` is that label. Listing several paths under `valueFiles`
-merges them into the one release. The value files sit outside `apps/` so the
-directory sync does not apply them as manifests. Each set pins
-`controllerServiceAccount` to `errand-controller-gha-rs-controller` in
-`ci-runners`. Argo renders with `helm template`, whose lookup cannot see the
-controller Deployment, and chart 0.15.1 fails closed unless both the name and
-the namespace are set. Every set uses privileged Docker-in-Docker.
+```yaml
+runs-on:
+  group: errand
+  labels: errand-arm-quark-backend
+```
 
-`arm` and `x64` run `ghcr.io/actions/actions-runner:2.338.2`. Each Quark set
-runs its job image as the pod, `autobutlerci.azurecr.io/quark/ci-<kind>:latest`
-with `imagePullPolicy: Always`, so a job on that label runs in the image without
-naming `container:`. Every Quark image carries the Actions runner and
-`/home/runner/run.sh`. The kubelet pulls it with its Container Registry
-Repository Reader assignment. Before each job the ACR login hook logs Docker
-into `autobutlerci.azurecr.io` as well, for a job that pulls from the registry.
+| Label | Job image |
+| --- | --- |
+| `errand-arm`, `errand-x64` and their sizes | `ghcr.io/actions/actions-runner:2.338.2` |
+| `errand-<arch>[-<size>]-quark-backend` | `autobutlerci.azurecr.io/quark/ci-backend:latest` |
+| `errand-<arch>[-<size>]-quark-frontend` | `autobutlerci.azurecr.io/quark/ci-frontend:latest` |
+| `errand-<arch>[-<size>]-quark-full` | `autobutlerci.azurecr.io/quark/ci-full:latest` |
 
-Every runner pod has a limit of 3500m CPU and 10Gi memory, which is as much as a
-4 vCPU, 16 GiB node leaves after AKS reserves and daemonsets. That is the
-GitHub-hosted size. Requests default to the limit, so it is one pod per node.
-The limit is on the pod (`template.spec.resources`), not on the runner
-container, so the runner and the dind sidecar share it. A Docker build runs in
-dind, and a container limit left dind unbounded and uncounted by the scheduler.
+Each Quark set runs its job image as the pod, with `imagePullPolicy: Always`, so a job on that
+label runs in the image without naming `container:`. Every Quark image carries the Actions runner
+and `/home/runner/run.sh`. The kubelet pulls it with its Container Registry Repository Reader
+assignment. Before each job the ACR login hook logs Docker into `autobutlerci.azurecr.io` as well,
+for a job that pulls from the registry.
 
-Each label also has `small`, `medium` and `large` variants. The size goes after
-the architecture and before the app: `arm-small`, `x64-medium-quark-backend`,
-`arm-large-quark-full`. Each is its own scale set, with values under
-`errand/<arch>/<size>/` and its Application under `apps/errand/<arch>/<size>/`.
-Each size doubles the last, and the unsized label keeps the full limit:
+The CPU and memory limit is on the pod, not on the runner container, so the runner and the dind
+sidecar share it. A Docker build runs in dind, and a container limit left dind unbounded and
+uncounted by the scheduler. Requests equal the limits. An unsized runner gets 3500m and 10Gi, which
+is as much as a 4 vCPU, 16 GiB node leaves after AKS reserves and daemonsets: the GitHub-hosted
+size, one pod per node. Each size doubles the last:
 
 | Size | CPU limit | Memory limit |
 | --- | --- | --- |
@@ -78,20 +69,10 @@ Each size doubles the last, and the unsized label keeps the full limit:
 
 `large` matches the unsized label. 4 cores would not schedule on these nodes.
 
-```yaml
-runs-on:
-  group: errand
-  labels: arm-quark-backend
-```
-
-`arm-quark-frontend` runs `quark/ci-frontend`, and `arm-quark-full` runs
-`quark/ci-full`. The x64 labels are `x64-quark-backend`, `x64-quark-frontend`,
-and `x64-quark-full`. The Application for each set lives under
-`gitops/autobutler/apps/errand/`, in the same `arm/` and `x64/` layout as the
-values. All thirty-two sets belong to the organization runner group `errand`, not Default. Create that group before the
-scale sets sync. Give it private-repository visibility and do not allow public
-repositories. Privileged Docker-in-Docker on a public repository accepts jobs
-from fork pull requests.
+All thirty-two sets belong to the organization runner group `errand`, not Default. Create that
+group before the scale sets sync. Give it private-repository visibility and do not allow public
+repositories. Privileged Docker-in-Docker on a public repository accepts jobs from fork pull
+requests.
 
 ## Argo
 
