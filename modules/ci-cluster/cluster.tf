@@ -24,6 +24,11 @@ resource "azurerm_kubernetes_cluster" "this" {
   kubernetes_version  = local.kubernetes_version
   sku_tier            = "Free"
 
+  # Not the default MC_<rg>_<cluster>_<location>. After the tenant move, Azure kept an
+  # old-tenant record for the kubelet identity at the default path, so every new cluster
+  # there failed with "Identity already exists in tenant ...". A new name is a new path.
+  node_resource_group = "${var.resource_group_name}-nodes"
+
   # Holds the minor at 1.36 while Azure applies later 1.36 patches. See the local.
   automatic_upgrade_channel = "patch"
 
