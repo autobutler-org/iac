@@ -25,7 +25,7 @@ terraform {
     key                  = "azure/autobutler.tfstate"
     use_azuread_auth     = true
     subscription_id      = "8add0a4f-6638-4cf3-95bd-cd46ab3ca970"
-    tenant_id            = "1196631e-40d1-42f3-91a4-1c80f49065f8"
+    tenant_id            = "76a63a4b-ede4-4cbd-bcda-285b1a0dc847"
   }
 
   required_providers {

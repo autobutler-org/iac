@@ -13,7 +13,13 @@ data "azurerm_client_config" "current" {}
 
 # Not the runner identity. That one is for CI jobs. This one is the External Secrets
 # controller, which has to read the vault before any runner exists. Recreating it changes
-# the client id baked into the Helm release, so it is not disposable.
+# the client id baked into the Helm release, which picks the new one up in the same
+# apply. Replaced on a tenant change for the same reason as the module's identities:
+# see terraform_data.tenant in modules/ci-cluster/identity.tf.
+resource "terraform_data" "tenant" {
+  input = data.azurerm_client_config.current.tenant_id
+}
+
 resource "azurerm_user_assigned_identity" "ci_gitops" {
   name                = "id-autobutler-ci-gitops"
   resource_group_name = azurerm_resource_group.autobutler_ci.name
@@ -21,7 +27,7 @@ resource "azurerm_user_assigned_identity" "ci_gitops" {
   tags                = local.tags
 
   lifecycle {
-    prevent_destroy = true
+    replace_triggered_by = [terraform_data.tenant]
   }
 }
 
