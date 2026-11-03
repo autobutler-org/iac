@@ -120,10 +120,7 @@ resource "helm_release" "argo_cd" {
   create_namespace = true
 
   # The repo credential is an ExternalSecret. Its CRD comes from the release above.
-  # upgrade_install covers the failed install already left in the cluster: Helm kept
-  # the release name, and a plain install would refuse to reuse it.
-  depends_on      = [helm_release.external_secrets]
-  upgrade_install = true
+  depends_on = [helm_release.external_secrets]
 
   values = [
     yamlencode({
@@ -172,9 +169,8 @@ resource "helm_release" "argo_cd" {
 # with "no matches for kind Application". This release runs after that one, when the
 # CRD is already registered.
 resource "helm_release" "argocd_bootstrap" {
-  name            = "argocd-bootstrap"
-  chart           = "${path.module}/charts/argocd-bootstrap"
-  namespace       = "argocd"
-  upgrade_install = true
-  depends_on      = [helm_release.argo_cd]
+  name       = "argocd-bootstrap"
+  chart      = "${path.module}/charts/argocd-bootstrap"
+  namespace  = "argocd"
+  depends_on = [helm_release.argo_cd]
 }
