@@ -1,3 +1,14 @@
+# A user-assigned identity is bound to the tenant it was created in. Moving the
+# subscription to another directory leaves it broken, and Microsoft's fix is delete and
+# recreate. Keying this on the tenant makes that a plan: a tenant change replaces it, and
+# replace_triggered_by below replaces every identity with it. The new principal and
+# client ids then flow into the federated credentials, role assignments and access
+# policies that reference them. No prevent_destroy on the identities: it would block
+# exactly this replacement, and an identity holds no data.
+resource "terraform_data" "tenant" {
+  input = data.azurerm_client_config.current.tenant_id
+}
+
 # User-assigned, not the system-assigned identity Azure CLI would create and not the
 # kubelet identity AKS creates later. The CLI would also attach Network Contributor.
 # Terraform creates that assignment itself, in network.tf, and the cluster waits for it.
@@ -8,7 +19,7 @@ resource "azurerm_user_assigned_identity" "control" {
   tags                = var.tags
 
   lifecycle {
-    prevent_destroy = true
+    replace_triggered_by = [terraform_data.tenant]
   }
 }
 
@@ -22,7 +33,7 @@ resource "azurerm_user_assigned_identity" "runner" {
   tags                = var.tags
 
   lifecycle {
-    prevent_destroy = true
+    replace_triggered_by = [terraform_data.tenant]
   }
 }
 
@@ -48,6 +59,10 @@ resource "azurerm_user_assigned_identity" "image" {
   resource_group_name = var.resource_group_name
   location            = var.location
   tags                = var.tags
+
+  lifecycle {
+    replace_triggered_by = [terraform_data.tenant]
+  }
 }
 
 resource "azurerm_federated_identity_credential" "image_quark_main" {
