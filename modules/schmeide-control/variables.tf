@@ -35,6 +35,11 @@ variable "allowed_orgs" {
   }
 }
 
+variable "dashboard_steward" {
+  description = "GitHub login whose runners and jobs the public dashboard shows. It must have an entry in the runner-tokens secret; the dashboard connects to NATS with that token."
+  type        = string
+}
+
 variable "key_vault_name" {
   description = "Globally unique name of the Key Vault holding the control node's secrets, 3-24 characters."
   type        = string

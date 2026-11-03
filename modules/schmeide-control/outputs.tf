@@ -3,6 +3,11 @@ output "webhook_url" {
   value       = "https://${local.hostname}/webhook"
 }
 
+output "dashboard_url" {
+  description = "Public dashboard of dashboard_steward's runners and jobs. No login."
+  value       = "https://${local.hostname}/"
+}
+
 output "nats_url" {
   description = "NATS URL runners connect to."
   value       = "tls://${local.hostname}:4222"

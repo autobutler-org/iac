@@ -25,7 +25,10 @@ module "schmeide_control" {
   schmeide_version = var.schmeide_control_version
   github_app_id    = var.schmeide_github_app_id
   allowed_orgs     = ["autobutler-org"]
-  key_vault_name   = "kv-schmeide-control"
+
+  # Shown publicly, with no login, at schmeide_control_dashboard_url.
+  dashboard_steward = "jamesaorson"
+  key_vault_name    = "kv-schmeide-control"
 
   admin_ssh_public_key = var.schmeide_control_ssh_public_key
 

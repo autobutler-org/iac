@@ -4,11 +4,12 @@ Stands up a [schmeide](https://github.com/autobutler-org/schmeide) control node 
 Azure VM. The node runs `schmeide control`, which serves the GitHub App's webhook through
 Caddy and runs the NATS server that runners pull jobs from.
 
-|             | autobutler                                      |
-| ----------- | ----------------------------------------------- |
-| Webhook URL | `https://schmeide.cloud.autobutler.org/webhook` |
-| NATS URL    | `tls://schmeide.cloud.autobutler.org:4222`      |
-| Key Vault   | `kv-schmeide-control`                           |
+|             | autobutler                                                  |
+| ----------- | ----------------------------------------------------------- |
+| Webhook URL | `https://schmeide.cloud.autobutler.org/webhook`             |
+| Dashboard   | `https://schmeide.cloud.autobutler.org/` (public, no login) |
+| NATS URL    | `tls://schmeide.cloud.autobutler.org:4222`                  |
+| Key Vault   | `kv-schmeide-control`                                       |
 
 ## Bringing a node up
 
