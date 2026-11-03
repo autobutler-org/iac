@@ -18,6 +18,7 @@ set -euox pipefail
 HOSTNAME_FQDN='${hostname}'
 IMAGE='${image}'
 VAULT_URI='${vault_uri}'
+DASHBOARD_STEWARD='${dashboard_steward}'
 
 # The uid the schmeide image runs as (distroless static:nonroot). Caddy runs as it too, so
 # the certificate and key Caddy writes 0600 are readable by schmeide, and the GitHub App key
@@ -84,7 +85,14 @@ cat > /etc/schmeide/Caddyfile <<EOF
 }
 
 $HOSTNAME_FQDN {
-	reverse_proxy schmeide-control:8080
+	handle /webhook {
+		reverse_proxy schmeide-control:8080
+	}
+	# Everything else is the dashboard, public and with no login, by choice. Its ask panel
+	# answers 502: there is no claude CLI or claude login on this host.
+	handle {
+		reverse_proxy schmeide-dashboard:7878
+	}
 }
 EOF
 
@@ -160,6 +168,35 @@ mv -f "$PEM_TMP" /run/schmeide/github-app.pem
 EOF
 chmod 0755 /usr/local/bin/schmeide-fetch-secrets
 
+# The dashboard connects to NATS as DASHBOARD_STEWARD, with that steward's entry from the
+# runner-tokens secret that schmeide-fetch-secrets has already put in /run. Its own unit, so
+# a steward missing from runner-tokens stops the dashboard and not the control node.
+cat > /usr/local/bin/schmeide-dashboard-env <<EOF
+#!/bin/bash
+set -euo pipefail
+STEWARD='$DASHBOARD_STEWARD'
+HOSTNAME_FQDN='$HOSTNAME_FQDN'
+EOF
+cat >> /usr/local/bin/schmeide-dashboard-env <<'EOF'
+umask 077
+tokens="$(sed -n 's/^SCHMEIDE_RUNNER_TOKENS=//p' /run/schmeide/secrets.env 2>/dev/null || true)"
+token=""
+IFS=, read -ra entries <<<"$tokens"
+for entry in "$${entries[@]}"; do
+  if [ "$${entry%%:*}" = "$STEWARD" ]; then token="$${entry#*:}"; fi
+done
+if [ -z "$token" ]; then
+  echo "schmeide-dashboard-env: no '$STEWARD:<token>' entry in runner-tokens yet." >&2
+  echo "  Check schmeide-control.service has started, or add $STEWARD to the runner-tokens secret." >&2
+  exit 1
+fi
+ENV_TMP="$(mktemp /run/schmeide/.dashboard.env.XXXXXX)"
+printf 'SCHMEIDE_STEWARD=%s\nSCHMEIDE_NATS_TOKEN=%s\nSCHMEIDE_NATS_URL=tls://%s:4222\n' \
+  "$STEWARD" "$token" "$HOSTNAME_FQDN" > "$ENV_TMP"
+mv -f "$ENV_TMP" /run/schmeide/dashboard.env
+EOF
+chmod 0755 /usr/local/bin/schmeide-dashboard-env
+
 # -- 5. Units --------------------------------------------------------------
 # Two containers on one docker network, so Caddy reaches the webhook listener by name and
 # 8080 is never published on the host. Caddy publishes 80 and 443; schmeide publishes 4222.
@@ -216,6 +253,32 @@ RestartSec=10
 WantedBy=multi-user.target
 EOF
 
+# The dashboard. Not published on the host; Caddy reaches it over the docker network. It
+# listens on 0.0.0.0 inside the container, which turns off its localhost-only Host check, so
+# Caddy can forward the public hostname. --add-host sends the NATS hostname to the docker
+# host, where 4222 is published, so the TLS name check passes without the public IP round trip.
+cat > /etc/systemd/system/schmeide-dashboard.service <<EOF
+[Unit]
+Description=schmeide dashboard, served publicly through Caddy
+After=docker.service schmeide-control.service
+Requires=docker.service
+
+[Service]
+ExecStartPre=/usr/local/bin/schmeide-dashboard-env
+ExecStartPre=-/usr/bin/docker network create schmeide
+ExecStartPre=-/usr/bin/docker rm -f schmeide-dashboard
+ExecStart=/usr/bin/docker run --rm --name schmeide-dashboard --network schmeide \\
+  --user $APP_UID:$APP_UID --add-host $HOSTNAME_FQDN:host-gateway \\
+  --env-file /run/schmeide/dashboard.env \\
+  $IMAGE dashboard --addr 0.0.0.0:7878
+ExecStop=/usr/bin/docker stop schmeide-dashboard
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
 # -- 6. Start --------------------------------------------------------------
 # Pull before the restart so a version bump's download is not part of the outage. Non-fatal:
 # a tag that is not published yet should not fail the extension, and the unit's own pull
@@ -223,8 +286,8 @@ EOF
 docker pull "$IMAGE" || log "WARNING: could not pull $IMAGE yet; schmeide-control.service keeps retrying."
 
 systemctl daemon-reload
-systemctl enable schmeide-caddy.service schmeide-control.service
-systemctl restart schmeide-caddy.service schmeide-control.service
+systemctl enable schmeide-caddy.service schmeide-control.service schmeide-dashboard.service
+systemctl restart schmeide-caddy.service schmeide-control.service schmeide-dashboard.service
 
 log "Setup complete for $HOSTNAME_FQDN."
 log "Until the Key Vault secrets are set, schmeide-control.service fails and retries:"

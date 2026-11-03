@@ -47,7 +47,7 @@ resource "azurerm_network_security_group" "this" {
     destination_address_prefix = "*"
   }
 
-  # Caddy, proxying to the webhook listener. GitHub delivers webhooks from a published but
+  # Caddy, proxying to the webhook listener and the dashboard. GitHub delivers webhooks from a published but
   # changing set of ranges, so this stays open rather than chasing api.github.com/meta.
   security_rule {
     name                       = "AllowHTTPS"

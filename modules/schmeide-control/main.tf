@@ -36,5 +36,7 @@ locals {
     vault_uri     = azurerm_key_vault.this.vault_uri
     github_app_id = var.github_app_id
     allowed_orgs  = join(",", var.allowed_orgs)
+
+    dashboard_steward = var.dashboard_steward
   })
 }
