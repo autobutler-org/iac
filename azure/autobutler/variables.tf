@@ -71,3 +71,31 @@ variable "schmeide_control_ssh_public_key" {
   type        = string
   default     = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBFF2mZiRit7xR865+/Relyro1JBD1TzGT48XeC4XGSg autobutler.org@gmail.com"
 }
+
+# No `# renovate:` comment, unlike the image tags above. The setup script verifies the
+# download against goatcounter_sha256, which Renovate cannot update, so a version-only bump
+# would merge, apply, and then fail on the VM. Bump both by hand; the module README says how
+# to get the checksum.
+variable "goatcounter_version" {
+  description = "GoatCounter release tag the stats server runs. Move goatcounter_sha256 with it; see goatcounter.tf."
+  type        = string
+  default     = "v2.7.0"
+}
+
+variable "goatcounter_sha256" {
+  description = "SHA-256 of goatcounter-<goatcounter_version>-linux-arm64.gz from the GoatCounter release page. GoatCounter publishes no checksum file, so this was computed from the downloaded asset when the version was pinned."
+  type        = string
+  default     = "ff5b2670b858bbe48802dfdc74130b6dcde2de9f5c1229b838eb9132769307dd"
+}
+
+variable "goatcounter_admin_email" {
+  description = "Login email of the GoatCounter admin user. Its password is generated on the VM, never in terraform."
+  type        = string
+  default     = "admin@autobutler.org"
+}
+
+variable "goatcounter_ssh_public_key" {
+  description = "SSH public key authorized on the GoatCounter VM. Public half only; the same key as the headscale and schmeide hosts."
+  type        = string
+  default     = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBFF2mZiRit7xR865+/Relyro1JBD1TzGT48XeC4XGSg autobutler.org@gmail.com"
+}

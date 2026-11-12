@@ -154,6 +154,14 @@ created, and that adoption is done — state holds all three and `make plan` is 
 `import` blocks have been removed; see "Adopting an existing resource" for the loop to
 follow next time.
 
+### GoatCounter
+
+`modules/goatcounter/` is the org's own page view counter, at `stats.cloud.autobutler.org`. autobutler.org and
+quark.autobutler.org send their cookieless beacon there instead of to goatcounter.com, so no visitor data leaves
+our infrastructure. It is one small Arm VM, like headscale, with GoatCounter serving its own TLS, SQLite on the
+OS disk, and a daily backup to a private blob container. The admin password is generated on the VM, never in
+terraform. `modules/goatcounter/README.md` has the login, restore and upgrade steps.
+
 ### CI cluster
 
 `modules/ci-cluster/` is AutoButler's own CI, not the ten-node product sketch. Terraform
