@@ -1,0 +1,255 @@
+#!/bin/bash
+# GoatCounter -- VM setup script.
+#
+# Runs as root via the Azure CustomScript extension. Rendered by templatefile() in main.tf,
+# so the two variable syntaxes collide, exactly as in modules/headscale:
+#
+#     $${name}    Terraform substitutes this at plan time
+#     $$${name}   renders to a literal $${name} -- the shell expands it at run time
+#
+# Every shell variable below is therefore doubled.
+#
+# Re-runs safely. The extension re-executes this whenever the rendered content changes,
+# against the existing VM. Packages and unit files are rewritten wholesale, the binary is
+# only downloaded when the version changes, and the site and its admin user are only
+# created when the database does not have them yet. The database is never overwritten.
+#
+# The flags and commands below are taken from GoatCounter's own documentation at the pinned
+# release: README.md ("Self-hosting GoatCounter"), `goatcounter help serve`,
+# `goatcounter help listen` and `goatcounter help db`. Re-check them there when the
+# version moves a major.
+set -euox pipefail
+
+readonly HOSTNAME_FQDN="${hostname}"
+readonly ADMIN_EMAIL='${admin_email}'
+readonly GC_VERSION="${goatcounter_version}"
+readonly GC_SHA256="${goatcounter_sha256}"
+readonly GC_ARCH="${arch}"
+readonly BACKUP_CONTAINER_URL="${backup_container_url}"
+
+readonly DATA_DIR=/var/lib/goatcounter
+readonly DB="$${DATA_DIR}/db.sqlite3"
+readonly DB_URI="sqlite+$${DB}"
+readonly ACME_DIR="$${DATA_DIR}/acme-secrets"
+readonly CONF_DIR=/etc/goatcounter
+readonly PASSWORD_FILE="$${CONF_DIR}/admin-password"
+readonly BIN=/usr/local/bin/goatcounter
+readonly RELEASE_DIR=/usr/local/lib/goatcounter
+readonly TARGET="$${RELEASE_DIR}/goatcounter-$${GC_VERSION}"
+
+# -- Helpers ---------------------------------------------------------------
+log() { echo "[setup] $*"; }
+retry() {
+  local n=0
+  until [ "$n" -ge 5 ]; do
+    "$@" && return 0
+    n=$((n+1))
+    log "Retrying ($n/5)..."
+    sleep 5
+  done
+  return 1
+}
+
+# -- 1. System packages ----------------------------------------------------
+# sqlite3 for the online backup, jq for the IMDS token, openssl for the password.
+log "Installing system packages..."
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -qq
+apt-get install -y -qq curl jq sqlite3 openssl ca-certificates gzip
+
+# -- 2. Service user and directories ---------------------------------------
+# GoatCounter runs as its own unprivileged user. /var/lib/goatcounter holds the database
+# and the ACME account key and certificates, and nothing outside it is writable by the
+# service (ProtectSystem=strict in the unit below).
+if ! id goatcounter >/dev/null 2>&1; then
+  useradd --system --home-dir "$${DATA_DIR}" --shell /usr/sbin/nologin goatcounter
+fi
+install -d -m 0750 -o goatcounter -g goatcounter "$${DATA_DIR}"
+install -d -m 0700 -o root -g root "$${CONF_DIR}"
+
+# -- 3. GoatCounter binary -------------------------------------------------
+# The release asset is a gzipped, statically linked binary. GoatCounter publishes no
+# checksum file, so the expected SHA-256 is pinned in Terraform next to the version, and a
+# download that does not match stops the script before anything is replaced.
+#
+# Each version is installed under its own name and /usr/local/bin/goatcounter is a symlink
+# to the current one, so the previous binary stays on disk for a rollback by hand.
+if [ ! -x "$${TARGET}" ]; then
+  log "Downloading GoatCounter $${GC_VERSION} ($${GC_ARCH})..."
+  DL="$(mktemp -d)"
+  retry curl -fsSL -o "$${DL}/goatcounter.gz" \
+    "https://github.com/arp242/goatcounter/releases/download/$${GC_VERSION}/goatcounter-$${GC_VERSION}-linux-$${GC_ARCH}.gz"
+  echo "$${GC_SHA256}  $${DL}/goatcounter.gz" | sha256sum -c -
+  gunzip -c "$${DL}/goatcounter.gz" > "$${DL}/goatcounter"
+  install -D -m 0755 "$${DL}/goatcounter" "$${TARGET}"
+  rm -rf "$${DL}"
+fi
+
+# A version change may migrate the database: the unit below starts with -automigrate. Copy
+# the database first, with sqlite3's online backup, so a bad migration can be rolled back
+# without going to the blob container. Only on a version change, so a plain re-run leaves
+# no extra copy behind.
+PREVIOUS="$(readlink -f "$${BIN}" 2>/dev/null || true)"
+if [ -f "$${DB}" ] && [ -n "$${PREVIOUS}" ] && [ "$${PREVIOUS}" != "$${TARGET}" ]; then
+  systemctl stop goatcounter.service || true
+  BAK="$${DB}.$(basename "$${PREVIOUS}").bak"
+  sqlite3 "$${DB}" ".backup '$${BAK}'"
+  chown goatcounter:goatcounter "$${BAK}"
+  log "Backed up the database to $${BAK} before switching to $${GC_VERSION}."
+fi
+ln -sfn "$${TARGET}" "$${BIN}"
+
+# -- 4. The site and its admin user ----------------------------------------
+# Created here, before the server first starts, and not through the web wizard: until a
+# site exists GoatCounter offers that wizard to whoever reaches it first.
+#
+# The admin password is generated on this VM and never passes through Terraform, which
+# would put it in state and in the planfile artifact. It is written to a root-only file,
+# where an admin who can SSH in reads it with sudo. It is only generated when the site does
+# not exist yet, so a re-run never changes it -- and changing it on the dashboard leaves
+# this file stale, which the module README says.
+#
+# `db show site -find <vhost>` exits non-zero when the site, or the database itself, does
+# not exist; -createdb then creates the database as part of `db create site`. Both run as
+# the service user so the database file is owned by it.
+cd "$${DATA_DIR}"
+if ! runuser -u goatcounter -- "$${BIN}" db show site -db "$${DB_URI}" -find "$${HOSTNAME_FQDN}" >/dev/null 2>&1; then
+  log "Creating the GoatCounter site for $${HOSTNAME_FQDN}..."
+  if [ ! -s "$${PASSWORD_FILE}" ]; then
+    (umask 077 && openssl rand -base64 24 > "$${PASSWORD_FILE}")
+  fi
+  # Tracing is off for this command: under `set -x` bash would echo the password to
+  # stderr, and the extension reports stderr back to ARM, readable by anyone with reader on
+  # the VM.
+  set +x
+  runuser -u goatcounter -- "$${BIN}" db create site -createdb -db "$${DB_URI}" \
+    -vhost "$${HOSTNAME_FQDN}" \
+    -user.email "$${ADMIN_EMAIL}" \
+    -user.password "$(cat "$${PASSWORD_FILE}")"
+  set -x
+  log "Created. The admin password is in $${PASSWORD_FILE}."
+fi
+
+# -- 5. systemd unit -------------------------------------------------------
+# -listen :443 -tls tls,rdr,acme:<dir> is the production setup from `goatcounter help
+# listen`: TLS on 443, port 80 redirected to it, and certificates from Let's Encrypt. The
+# ACME client only requests a certificate for a host that is a site in the database, on
+# the first TLS request for it, and answers the HTTP-01 challenge on port 80 -- which is
+# why the NSG keeps 80 open. Until DNS resolves here, issuance fails and is retried on the
+# next request; nothing in this script waits for it.
+#
+# -automigrate runs the new version's migrations at start, after step 3's copy.
+#
+# Ports 80 and 443 without root: CAP_NET_BIND_SERVICE, and nothing else.
+cat > /etc/systemd/system/goatcounter.service <<UNIT
+[Unit]
+Description=GoatCounter web analytics
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=goatcounter
+Group=goatcounter
+WorkingDirectory=$${DATA_DIR}
+ExecStart=$${BIN} serve -db $${DB_URI} -listen :443 -tls tls,rdr,acme:$${ACME_DIR} -automigrate
+Restart=on-failure
+RestartSec=5
+
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=$${DATA_DIR}
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+systemctl daemon-reload
+systemctl enable goatcounter.service
+systemctl restart goatcounter.service
+
+# -- 6. Daily backup to blob storage ---------------------------------------
+# sqlite3's .backup takes a consistent copy while GoatCounter keeps writing, so the service
+# never stops for it. The copy is integrity-checked, gzipped and uploaded as a new dated
+# blob with a single Put Blob call; the storage account's lifecycle rule deletes old ones.
+#
+# Authentication is the VM's managed identity: a token from IMDS for storage.azure.com,
+# handed to curl through a 0600 header file rather than argv, where any local user could
+# read it from /proc. The account has shared keys off, so there is no key to hold either.
+#
+# The role assignment can take a few minutes to propagate after the first apply, so the
+# first run is left to the timer rather than made here, where a 403 would fail the script.
+cat > /usr/local/sbin/goatcounter-backup <<SCRIPT
+#!/bin/bash
+set -euo pipefail
+
+readonly DB="$${DB}"
+readonly CONTAINER_URL="$${BACKUP_CONTAINER_URL}"
+
+WORK="\$(mktemp -d)"
+trap 'rm -rf "\$WORK"' EXIT
+
+sqlite3 "\$DB" ".backup '\$WORK/db.sqlite3'"
+if [ "\$(sqlite3 "\$WORK/db.sqlite3" 'PRAGMA integrity_check;')" != "ok" ]; then
+  echo "goatcounter-backup: the copy of \$DB failed its integrity check; nothing uploaded." >&2
+  exit 1
+fi
+gzip -9 "\$WORK/db.sqlite3"
+
+token="\$(curl -sf -H Metadata:true \\
+  'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https%3A%2F%2Fstorage.azure.com%2F' \\
+  | jq -r .access_token)" || {
+  echo "goatcounter-backup: no managed identity token from IMDS. Check the VM's system-assigned identity." >&2
+  exit 1
+}
+(umask 077 && printf 'Authorization: Bearer %s\n' "\$token" > "\$WORK/auth")
+unset token
+
+NAME="db-\$(date -u +%Y%m%dT%H%M%SZ).sqlite3.gz"
+curl -sSf -X PUT \\
+  -H "@\$WORK/auth" \\
+  -H 'x-ms-version: 2023-11-03' \\
+  -H 'x-ms-blob-type: BlockBlob' \\
+  -H 'Content-Type: application/gzip' \\
+  --data-binary "@\$WORK/db.sqlite3.gz" \\
+  "\$CONTAINER_URL/\$NAME" || {
+  echo "goatcounter-backup: upload of \$NAME failed. A 403 means the VM's identity lacks Storage Blob Data Contributor on the container." >&2
+  exit 1
+}
+echo "goatcounter-backup: uploaded \$CONTAINER_URL/\$NAME"
+SCRIPT
+chmod 0755 /usr/local/sbin/goatcounter-backup
+
+cat > /etc/systemd/system/goatcounter-backup.service <<'UNIT'
+[Unit]
+Description=Back up the GoatCounter database to blob storage
+After=goatcounter.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/goatcounter-backup
+UNIT
+
+# Persistent: a run missed while the VM was deallocated happens at the next boot.
+cat > /etc/systemd/system/goatcounter-backup.timer <<'UNIT'
+[Unit]
+Description=Daily GoatCounter database backup
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+UNIT
+
+systemctl daemon-reload
+systemctl enable --now goatcounter-backup.timer
+
+log "Done. GoatCounter serves https://$${HOSTNAME_FQDN}/ once DNS resolves here."
+log "Admin login: $${ADMIN_EMAIL}, password in $${PASSWORD_FILE} (sudo cat)."
+log "Backups: systemctl list-timers goatcounter-backup.timer; journalctl -u goatcounter-backup"

@@ -147,3 +147,23 @@ output "ci_control_plane_identity_principal_id" {
   description = "Object id of the CI control-plane identity. It has Network Contributor on the cluster VNet, which the cluster create waits for."
   value       = module.ci_cluster.control_plane_identity_principal_id
 }
+
+output "goatcounter_url" {
+  description = "GoatCounter dashboard. Log in with goatcounter_admin_email and the password generated on the VM; see modules/goatcounter/README.md."
+  value       = module.goatcounter.url
+}
+
+output "goatcounter_count_url" {
+  description = "Endpoint autobutler.org and quark.autobutler.org send their page view beacon to."
+  value       = module.goatcounter.count_url
+}
+
+output "goatcounter_vm_name" {
+  description = "Name of the GoatCounter VM, for az ssh vm --resource-group goatcounter --name <this>."
+  value       = module.goatcounter.vm_name
+}
+
+output "goatcounter_backup_container_url" {
+  description = "Blob container holding the daily GoatCounter database backups."
+  value       = module.goatcounter.backup_container_url
+}
