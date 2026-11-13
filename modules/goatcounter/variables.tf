@@ -102,7 +102,7 @@ variable "dns_zone_resource_group_name" {
 variable "dns_record_name" {
   description = "Zone-relative name of GoatCounter's A record."
   type        = string
-  default     = "stats"
+  default     = "goatcounter"
 }
 
 variable "tags" {

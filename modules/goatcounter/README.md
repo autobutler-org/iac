@@ -6,8 +6,8 @@ goatcounter.com.
 
 |             | autobutler                                                                      |
 | ----------- | ------------------------------------------------------------------------------- |
-| Dashboard   | `https://stats.cloud.autobutler.org/`                                           |
-| Beacon      | `https://stats.cloud.autobutler.org/count`                                      |
+| Dashboard   | `https://goatcounter.cloud.autobutler.org/`                                     |
+| Beacon      | `https://goatcounter.cloud.autobutler.org/count`                                |
 | Admin login | `admin@autobutler.org`, password in `/etc/goatcounter/admin-password` on the VM |
 | Backups     | `https://stautobutlergoatcounter.blob.core.windows.net/backups`                 |
 | VM          | `goatcounter` in resource group `goatcounter`                                   |
@@ -17,7 +17,7 @@ goatcounter.com.
 - An Arm Ubuntu 24.04 VM (`Standard_B2pts_v2`, the headscale host's size), with a system-assigned managed identity
   and Entra ID SSH (`AADSSHLoginForLinux`).
 - A static public IP, a network security group that opens 22, 80 and 443 only, and an alias A record
-  `stats.cloud.autobutler.org` in the `cloud` zone.
+  `goatcounter.cloud.autobutler.org` in the `cloud` zone.
 - A setup script, run through the CustomScript extension, that installs GoatCounter, creates the site, and runs
   it under systemd. A changed script re-runs in place, so a version bump never replaces the VM.
 - A private storage account with shared keys off and a `backups` container, a lifecycle rule that deletes
@@ -52,7 +52,7 @@ script creates the site before GoatCounter first starts:
 
 ```text
 goatcounter db create site -createdb -db sqlite+/var/lib/goatcounter/db.sqlite3 \
-  -vhost stats.cloud.autobutler.org -user.email admin@autobutler.org -user.password <generated>
+  -vhost goatcounter.cloud.autobutler.org -user.email admin@autobutler.org -user.password <generated>
 ```
 
 The password is `openssl rand -base64 24`, generated on the VM and written to `/etc/goatcounter/admin-password`,
@@ -67,7 +67,7 @@ SMTP configured, so a "forgot password" email is written to the service's journa
 
 ### Prerequisite: the `cloud` delegation
 
-The NS records for `cloud` must exist at Porkbun, or `stats.cloud.autobutler.org` doesn't resolve and Let's
+The NS records for `cloud` must exist at Porkbun, or `goatcounter.cloud.autobutler.org` doesn't resolve and Let's
 Encrypt cannot issue. The `ONE-TIME MANUAL STEP` comment on the `cloud` zone in
 [`azure/autobutler/dns.tf`](../../azure/autobutler/dns.tf) describes it. If `schmeide.cloud.autobutler.org`
 already works, the delegation is done.
@@ -81,14 +81,14 @@ az ssh vm --resource-group goatcounter --name goatcounter
 sudo cat /etc/goatcounter/admin-password
 ```
 
-Then log in at `https://stats.cloud.autobutler.org/` as `admin@autobutler.org`. The first HTTPS request may take a
+Then log in at `https://goatcounter.cloud.autobutler.org/` as `admin@autobutler.org`. The first HTTPS request may take a
 few seconds while the certificate is issued.
 
 ### 2. Point the sites at it
 
-Both sites send `navigator.sendBeacon("https://stats.cloud.autobutler.org/count?p=<host><path>&r=<referrer>")`.
+Both sites send `navigator.sendBeacon("https://goatcounter.cloud.autobutler.org/count?p=<host><path>&r=<referrer>")`.
 GoatCounter's `/count` accepts the POST that `sendBeacon` makes. Change the host in each site's page view code
-from `autobutler.goatcounter.com` to `stats.cloud.autobutler.org`. Counts on goatcounter.com are not moved over.
+from `autobutler.goatcounter.com` to `goatcounter.cloud.autobutler.org`. Counts on goatcounter.com are not moved over.
 To keep them, export them there and import them with `goatcounter import` on the VM.
 
 ## Backups

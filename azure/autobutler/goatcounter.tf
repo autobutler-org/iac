@@ -33,7 +33,7 @@ module "goatcounter" {
 
   dns_zone_name                = azurerm_dns_zone.cloud.name
   dns_zone_resource_group_name = azurerm_resource_group.dns.name
-  dns_record_name              = "stats"
+  dns_record_name              = "goatcounter"
 
   tags = local.tags
 }
