@@ -1,6 +1,6 @@
 # Static Standard address for the Argo CD UI. The A record aliases this resource, so
 # replacing the address updates the name without an apply-read-apply loop. Same pattern
-# as modules/schmeide-control/dns.tf.
+# as modules/headscale/dns.tf, which explains it.
 #
 # The IP lives in the cluster resource group, not the node resource group AKS owns.
 # The Argo Service, installed later, attaches it by name. The control-plane identity

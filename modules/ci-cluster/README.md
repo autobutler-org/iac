@@ -80,8 +80,7 @@ Do not run the script from CI, and do not run the apply locally.
 
 Terraform never holds the secret. After the first apply, a person sets one Key Vault
 secret. The App does not exist yet. Create it in GitHub (one Actions app, not a second
-app, and not the schmeide app) and put its whole PEM here. The schmeide vault has a
-secret of the same name. That is a different key. Do not copy it.
+app) and put its whole PEM here.
 
 Grant yourself secret access. The runner's access policy is managed by terraform, and a
 policy added by hand is left alone:

@@ -69,8 +69,8 @@ SMTP configured, so a "forgot password" email is written to the service's journa
 
 The NS records for `cloud` must exist at Porkbun, or `goatcounter.cloud.autobutler.org` doesn't resolve and Let's
 Encrypt cannot issue. The `ONE-TIME MANUAL STEP` comment on the `cloud` zone in
-[`azure/autobutler/dns.tf`](../../azure/autobutler/dns.tf) describes it. If `schmeide.cloud.autobutler.org`
-already works, the delegation is done.
+[`azure/autobutler/dns.tf`](../../azure/autobutler/dns.tf) describes it. If any name under `cloud.autobutler.org`
+already resolves, the delegation is done.
 
 ### 1. Read the password
 
