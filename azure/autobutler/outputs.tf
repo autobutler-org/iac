@@ -63,26 +63,6 @@ output "cloud_dns_zone_nameservers" {
   value       = azurerm_dns_zone.cloud.name_servers
 }
 
-output "schmeide_control_webhook_url" {
-  description = "Webhook URL to set on the schmeide GitHub App."
-  value       = module.schmeide_control.webhook_url
-}
-
-output "schmeide_control_dashboard_url" {
-  description = "Public schmeide dashboard. No login."
-  value       = module.schmeide_control.dashboard_url
-}
-
-output "schmeide_control_nats_url" {
-  description = "NATS URL schmeide runners connect to."
-  value       = module.schmeide_control.nats_url
-}
-
-output "schmeide_control_key_vault_name" {
-  description = "Key Vault whose webhook-secret, github-app-private-key and runner-tokens secrets a person sets by hand after the first apply."
-  value       = module.schmeide_control.key_vault_name
-}
-
 output "ci_cluster_name" {
   description = "AKS cluster name. kubectl and, later, Argo CD target this cluster."
   value       = module.ci_cluster.cluster_name

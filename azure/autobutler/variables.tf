@@ -53,26 +53,7 @@ variable "cloud_dns_zone" {
   default     = "cloud.autobutler.org"
 }
 
-variable "schmeide_control_version" {
-  description = "Tag of ghcr.io/autobutler-org/schmeide the control node runs. Renovate bumps it; see schmeide-control.tf."
-  type        = string
-  # renovate: datasource=docker depName=ghcr.io/autobutler-org/schmeide
-  default = "0.0.9"
-}
-
-variable "schmeide_github_app_id" {
-  description = "App ID of the schmeide GitHub App. Not a secret: it is in every token the App mints."
-  type        = string
-  default     = "5304111"
-}
-
-variable "schmeide_control_ssh_public_key" {
-  description = "SSH public key authorized on the schmeide control VM. Public half only; the same key as the headscale host."
-  type        = string
-  default     = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBFF2mZiRit7xR865+/Relyro1JBD1TzGT48XeC4XGSg autobutler.org@gmail.com"
-}
-
-# No `# renovate:` comment, unlike the image tags above. The setup script verifies the
+# No `# renovate:` comment, unlike quark_instance_version. The setup script verifies the
 # download against goatcounter_sha256, which Renovate cannot update, so a version-only bump
 # would merge, apply, and then fail on the VM. Bump both by hand; the module README says how
 # to get the checksum.
@@ -95,7 +76,7 @@ variable "goatcounter_admin_email" {
 }
 
 variable "goatcounter_ssh_public_key" {
-  description = "SSH public key authorized on the GoatCounter VM. Public half only; the same key as the headscale and schmeide hosts."
+  description = "SSH public key authorized on the GoatCounter VM. Public half only; the same key as the headscale host."
   type        = string
   default     = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBFF2mZiRit7xR865+/Relyro1JBD1TzGT48XeC4XGSg autobutler.org@gmail.com"
 }

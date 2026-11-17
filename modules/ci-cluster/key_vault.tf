@@ -5,11 +5,9 @@
 #   github-app-private-key   the Actions GitHub App's private key, the whole PEM
 #
 # The App does not exist yet, and terraform does not create it. This is not a second
-# app, and it is not the schmeide app, which has its own vault and its own copy of a
-# secret with the same name.
+# app.
 #
-# Access policies rather than Azure RBAC, for the same reason as
-# modules/schmeide-control. CI applies as a Contributor, which can write access policies
+# Access policies rather than Azure RBAC. CI applies as a Contributor, which can write access policies
 # (they are part of the vault resource) but cannot create role assignments. The
 # bootstrap script's constrained Role Based Access Control Administrator grant does not
 # change that for this vault: Key Vault data-plane roles are not in the condition's

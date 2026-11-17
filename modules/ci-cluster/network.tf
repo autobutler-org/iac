@@ -1,4 +1,4 @@
-# 10.8.0.0/16, not 10.0.0.0/16. schmeide and headscale each use 10.0.0.0/16 in their own
+# 10.8.0.0/16, not 10.0.0.0/16. headscale and goatcounter each use 10.0.0.0/16 in their own
 # VNets. Those VNets are not peered today, but reusing the range would make a later
 # peering impossible. The node subnet is a /22: Azure CNI overlay does not take a pod
 # address from it, so a node takes one address. A /22 holds the system node and both
