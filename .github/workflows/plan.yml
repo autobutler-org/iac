@@ -1,8 +1,7 @@
 # Terraform plan against real Azure state.
 #
-# Two triggers in one file on purpose. `pull_request` is how a reviewer sees what a change
-# would do; `workflow_call` makes this reusable, so apply.yml runs the exact same plan job
-# as its first step rather than duplicating the steps and drifting from them.
+# Shows a reviewer what a pull request would do. It uploads nothing: apply.yml plans and
+# applies in one job, so the planfile never leaves the runner.
 #
 # Authentication is OIDC -- azure/login exchanges a short-lived GitHub token for an Azure
 # one, so there is no client secret anywhere. AZURE_CLIENT_ID, AZURE_TENANT_ID and
@@ -14,7 +13,6 @@ on:
   pull_request:
     branches:
       - main
-  workflow_call:
 defaults:
   run:
     shell: bash
@@ -22,10 +20,7 @@ permissions:
   # id-token: write is what lets the job mint the OIDC token azure/login exchanges.
   id-token: write
   contents: read
-  # For the plan comment. Every caller must grant this too, including apply.yml on the
-  # workflow_call path where the comment step never runs -- a called workflow cannot
-  # request more than its caller grants, and that is enforced at load time rather than
-  # when the gated step would have run.
+  # For the plan comment.
   pull-requests: write
 concurrency:
   group: ${{ github.repository }}-${{ github.workflow }}-${{ github.ref }}
@@ -57,8 +52,7 @@ jobs:
 
       # The Helm provider auths with kubelogin. local_account_disabled means there is no
       # admin client certificate to use instead. az aks install-cli is idempotent and does
-      # not need a secret. The apply job is a different runner, so it installs kubelogin
-      # itself. Calling this workflow does not put the binary on that machine.
+      # not need a secret.
       - name: Install kubelogin
         run: az aks install-cli
 
@@ -150,8 +144,7 @@ jobs:
                   `The full plan is ${plan.length.toLocaleString()} characters, past the ` +
                   `${BODY_LIMIT.toLocaleString()}-character limit for a comment, so it is not inlined here.`,
                   '',
-                  `- **[Job summary and logs for this run](${runUrl})** -- the complete plan is rendered there, no download needed.`,
-                  `- The \`planfile-${context.sha}\` artifact on that page is the binary planfile the apply consumes.`,
+                  `**[Job summary and logs for this run](${runUrl})** -- the complete plan is rendered there.`,
                 ].join('\n');
 
             const { data: comments } = await github.rest.issues.listComments({
@@ -167,12 +160,3 @@ jobs:
               await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
             }
 
-      # Named with the commit SHA so apply.yml can prove it is applying the plan for the
-      # commit it is actually running on, rather than whatever plan happened to be latest.
-      - name: Upload planfile
-        uses: actions/upload-artifact@v7
-        with:
-          name: planfile-${{ github.sha }}
-          path: azure/autobutler/planfile.tfplan
-          retention-days: 5
-          if-no-files-found: error

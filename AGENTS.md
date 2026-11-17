@@ -102,8 +102,8 @@ Four workflows in `.github/workflows/`:
 | Workflow | Trigger | What it does |
 | --- | --- | --- |
 | `check.yml` | PR to `main`, push to `main`, manual | `make check/format`, `check/lint`, `check/markdown`, `check/bicep`, `check/validate` |
-| `plan.yml` | PR to `main`, `workflow_call` | `make init` + `make plan`; uploads the planfile, and posts the plan to the job summary and a sticky PR comment |
-| `apply.yml` | push to `main`, manual | calls `plan.yml`, then `make apply-from-planfile` on the planfile that job produced |
+| `plan.yml` | PR to `main` | `make init` + `make plan`; posts the plan to the job summary and a sticky PR comment |
+| `apply.yml` | push to `main`, manual | `make init` + `make plan` + `make apply-from-planfile`, in one job |
 | `codeql.yml` | PR to `main`, push to `main`, weekly, manual | CodeQL on the `actions` language — the workflows themselves, nothing else |
 
 `check.yml` needs **no Azure credentials** — `check/validate` inits with `-backend=false`,
@@ -114,12 +114,13 @@ The plan comment is one comment, edited in place on every push, found by a
 `<!-- terraform-plan -->` marker. A plan past 60,000 characters is not inlined -- an issue
 comment is capped at 65,536 and exceeding it fails the API call -- so the comment falls
 back to the `Plan:` summary line plus a link to the run, where the job summary carries the
-full text and the planfile artifact sits alongside it. The summary line survives either
+full text. The summary line survives either
 way; it is the thing a reviewer looks for first.
 
-`apply.yml` does not re-derive the plan. It runs `plan.yml` as a job and applies that
-job's planfile, which is named with the commit SHA, so what gets applied is provably what
-was planned for the commit being applied. Its `apply` job is gated on the `production`
+`apply.yml` plans and applies in one job, so what gets applied is provably what was
+planned for the commit being applied. Never upload a planfile as an artifact: it embeds
+the configuration and a snapshot of state, and artifacts of this public repo can be
+downloaded by any signed-in GitHub user. Its `apply` job is gated on the `production`
 environment, where required reviewers can be added in repo settings.
 
 Authentication is OIDC via `azure/login`. There is no client secret anywhere:
@@ -127,7 +128,7 @@ Authentication is OIDC via `azure/login`. There is no client secret anywhere:
 *variables*, none of which is sensitive. `bootstrap/github-oidc.bash` creates the app
 registration and federated credentials this depends on.
 
-No workflow reads an Actions secret. A `TF_VAR` lands in the planfile artifact and in state,
+No workflow reads an Actions secret. A `TF_VAR` lands in the planfile and in state,
 so anything that must stay confidential comes from a data source such as Key Vault, or is
 generated where it is used (the headscale household key, see `modules/headscale/README.md`),
 never from a `TF_VAR`.

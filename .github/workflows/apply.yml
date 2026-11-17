@@ -1,8 +1,10 @@
 # Terraform apply. Runs on push to main -- so an apply always corresponds to a reviewed,
 # merged commit -- and on manual dispatch for recovery.
 #
-# The plan is not re-derived here. This workflow calls plan.yml, then applies the planfile
-# that job produced, so what gets applied is exactly what was planned for this commit.
+# Plan and apply run in one job, so what gets applied is exactly what was planned for this
+# commit, and the planfile never leaves the runner. It embeds the configuration and a
+# snapshot of state, secrets included, and artifacts of a public repo can be downloaded by
+# any signed-in GitHub user, so it must never be uploaded as one.
 name: Apply
 on:
   push:
@@ -22,23 +24,7 @@ concurrency:
 env:
   TERRAFORM_VERSION: "1.16.0"
 jobs:
-  plan:
-    uses: ./.github/workflows/plan.yml
-    # pull-requests: write is granted even though this path never comments -- the comment
-    # step in plan.yml is gated on the event being a pull_request, and this runs on push.
-    #
-    # It is required anyway. A called workflow cannot request a permission its caller does
-    # not grant, and that contract is checked when the run is loaded, before any step-level
-    # `if` is evaluated. Omitting it does not produce a skipped step; it produces a
-    # startup_failure with no logs, no jobs, and nothing to read but "workflow file issue".
-    permissions:
-      id-token: write
-      contents: read
-      pull-requests: write
-    secrets: inherit
-
   apply:
-    needs: plan
     runs-on: ubuntu-latest
     # GitHub creates this environment on first use with no protection rules, so it changes
     # nothing today. It exists so required reviewers, a wait timer, or branch restrictions
@@ -64,25 +50,18 @@ jobs:
           terraform_version: ${{ env.TERRAFORM_VERSION }}
           terraform_wrapper: false
 
-      # The plan job installs kubelogin on its own runner. This job is a new machine, and
-      # helm_release runs kubelogin here during apply. local_account_disabled means there
-      # is no admin client certificate to fall back to.
+      # helm_release auths with kubelogin. local_account_disabled means there is no admin
+      # client certificate to fall back to.
       - name: Install kubelogin
         run: az aks install-cli
 
-      - name: Download planfile
-        uses: actions/download-artifact@v8
-        with:
-          name: planfile-${{ github.sha }}
-          path: azure/autobutler
-
-      # init runs again rather than carrying .terraform/ across jobs. A planfile is bound to
-      # the configuration and the state it was made against, so the apply job has to init
-      # against that same state anyway -- and the committed four-platform lock file makes
-      # this restore byte-identical providers, which is the part that actually matters.
       - name: Init
         run: |
           make init
+
+      - name: Plan
+        run: |
+          make plan
 
       - name: Apply
         run: |
