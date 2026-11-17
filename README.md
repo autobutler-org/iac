@@ -88,11 +88,11 @@ Azure credentials at all — `make check/validate` inits with `-backend=false`, 
 provider schemas and nothing else. That keeps the basic signal working regardless of
 whether a run has an Azure identity.
 
-`plan.yml` runs a real plan on a PR, uploads the planfile as an artifact named for the
-commit, and writes the readable plan into the job summary. `apply.yml` runs on push to
-`main`, calls `plan.yml` as its first job, and applies that job's planfile — so what gets
-applied is provably what was planned for the commit being applied, rather than a second
-plan that might have raced with someone else's merge.
+`plan.yml` runs a real plan on a PR and writes the readable plan into the job summary.
+`apply.yml` runs on push to `main`, plans and applies that planfile in the same job — so
+what gets applied is provably what was planned for the commit being applied, and the
+planfile, which embeds a snapshot of state, never leaves the runner. It is never uploaded
+as an artifact: those are downloadable by any signed-in GitHub user in a public repo.
 
 Authentication is OIDC; there is no client secret. `bootstrap/github-oidc.bash` creates the
 app registration and federated credentials, and prints the three repository variables to
