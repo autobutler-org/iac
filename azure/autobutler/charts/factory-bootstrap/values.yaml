@@ -1,0 +1,2 @@
+# Set by terraform from the factory module's key_vault_uri.
+vaultUrl: ""

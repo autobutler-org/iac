@@ -45,5 +45,11 @@ terraform {
       source  = "hashicorp/helm"
       version = "~> 3.0"
     }
+    # The factory PostgreSQL admin password is an ephemeral random_password. Ephemeral
+    # resources arrived in 3.7.
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.7"
+    }
   }
 }

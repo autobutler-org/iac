@@ -1,0 +1,4 @@
+apiVersion: v2
+name: factory-bootstrap
+description: The factory and factory-workers namespaces, the worker quota, the secret store and the database URL, installed after External Secrets has registered its CRDs.
+version: 0.1.0

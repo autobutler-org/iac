@@ -10,8 +10,8 @@
 #
 # Safe to re-run: every step checks for what it would create first. create also assigns
 # Role Based Access Control Administrator on the subscription, with an ABAC condition.
-# Contributor cannot write role assignments, and the CI cluster needs several. The
-# condition allows write and delete only for the six built-in roles that cluster's
+# Contributor cannot write role assignments, and the CI and factory clusters need
+# several. The condition allows write and delete only for the eight built-in roles their
 # terraform uses. An assignment with an empty condition is not this grant. It would be
 # an unconstrained RBAC administrator, and doctor reports that as missing.
 
@@ -38,6 +38,9 @@ readonly AUDIENCE="api://AzureADTokenExchange"
 # documented ids. None differed. Writer was checked 2026-10-30:
 #   az role definition list --name "Container Registry Repository Writer" --query "[0].name" -o tsv
 #   2a1e307c-b015-4ebd-883e-5b7698a07328
+# The factory's monitoring added two, checked 2026-11-18 the same way:
+#   Monitoring Data Reader  b0d8363b-8ddd-447d-831f-62ca05bff136
+#   Grafana Admin           22926164-76b3-42b3-bc55-97df8dab3e41
 readonly RBAC_ADMIN_ROLE="Role Based Access Control Administrator"
 readonly RBAC_ADMIN_CONDITION_VERSION="2.0"
 
@@ -75,8 +78,8 @@ What 'create' does:
   5. Role Based Access Control Administrator on the subscription, with a condition that
      allows role-assignment write and delete only for Network Contributor, Container
      Registry Repository Reader, Container Registry Repository Writer, Storage Blob
-     Data Contributor, Azure Kubernetes Service Cluster User Role, and Azure Kubernetes
-     Service RBAC Cluster Admin. Re-run create before applying a new role from that
+     Data Contributor, Azure Kubernetes Service Cluster User Role, Azure Kubernetes
+     Service RBAC Cluster Admin, Monitoring Data Reader, and Grafana Admin. Re-run create before applying a new role from that
      list, or the apply fails on the role assignment.
 
 Run 'make bootstrap' first -- step 4 needs the state account to exist.
@@ -197,6 +200,8 @@ rbac_admin_condition() {
 	guids+=", ba92f5b4-2d11-453d-a403-e96b0029c9fe"
 	guids+=", 4abbcc35-e782-43d8-92c5-2d3f1bd2253f"
 	guids+=", b1ff04bb-8a4e-4dc4-8eb5-8693973ce19b"
+	guids+=", b0d8363b-8ddd-447d-831f-62ca05bff136"
+	guids+=", 22926164-76b3-42b3-bc55-97df8dab3e41"
 	printf '%s' \
 		"((!(ActionMatches{'Microsoft.Authorization/roleAssignments/write'}))" \
 		" OR (@Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {${guids}}))" \

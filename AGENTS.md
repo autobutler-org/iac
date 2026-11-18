@@ -131,7 +131,9 @@ registration and federated credentials this depends on.
 No workflow reads an Actions secret. A `TF_VAR` lands in the planfile and in state,
 so anything that must stay confidential comes from a data source such as Key Vault, or is
 generated where it is used (the headscale household key, see `modules/headscale/README.md`),
-never from a `TF_VAR`.
+never from a `TF_VAR`. A secret Azure needs at create time, like a PostgreSQL admin
+password, is an `ephemeral` resource passed only to write-only (`*_wo`) arguments, so it
+reaches neither the planfile nor state (see `modules/factory/postgresql.tf`).
 
 `concurrency` differs between the two on purpose: a superseded plan is cancelled, an apply
 never is. A half-applied change is worse than a queued one.
