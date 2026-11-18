@@ -35,3 +35,28 @@ provider "helm" {
     }
   }
 }
+
+# The factory cluster, same kubelogin flow. Aliased because the default provider above
+# is the CI cluster, and every resource in ci-gitops.tf relies on that default.
+provider "helm" {
+  alias = "factory"
+
+  kubernetes = {
+    host                   = module.factory.cluster_host
+    cluster_ca_certificate = base64decode(module.factory.cluster_ca_certificate)
+    exec = {
+      api_version = "client.authentication.k8s.io/v1beta1"
+      command     = "kubelogin"
+      args = [
+        "get-token",
+        "--login",
+        "azurecli",
+        "--server-id",
+        "6dae42f8-4368-4678-94ff-3960e28e3630",
+      ]
+    }
+  }
+}
+
+# No settings. Declared so the pin in backend.tf is the one modules/factory resolves.
+provider "random" {}

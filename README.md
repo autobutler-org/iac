@@ -189,3 +189,28 @@ Argo CD lives in the next layer, `azure/autobutler/ci-gitops.tf`, not in the clu
 module. Terraform installs Argo CD and External Secrets once. Argo applies what is under
 `gitops/autobutler/apps`. The runner chart is still not in this repo. Argo's server attaches the public IP
 reserved with the cluster, which `argo.errand.cloud.autobutler.org` already names.
+
+### Factory
+
+`modules/factory/` is the infrastructure for the
+[factory](https://github.com/autobutler-org/factory) MVP: its own AKS cluster, a PostgreSQL
+flexible server with the `factory` and `substrate` databases, a Key Vault, managed
+Prometheus with Azure Managed Grafana, a private container for Agent Substrate snapshots,
+and `factory.cloud.autobutler.org`. Agent workers are Kubernetes Jobs in
+`factory-workers` on a tainted Arm pool; Substrate may come later. It is a
+cluster of its own, not a node pool in `autobutler-ci`, because agent sessions run
+unreviewed code and should not share a control plane with the CI credentials.
+
+The cluster runs Kubernetes 1.37, ahead of CI, so Substrate stays possible: it needs APIs
+that 1.36 serves only as beta. PostgreSQL is in `eastus2` because flexible server provisioning is
+restricted in `eastus` for this subscription; its firewall admits the cluster's one
+static egress address. The admin password is an ephemeral value written only to
+write-only arguments, so it is in no plan and no state.
+
+`azure/autobutler/factory-gitops.tf` installs External Secrets and the `factory` and
+`factory-workers` namespaces. Grafana's reader role and the apply identity's Grafana
+Admin role are two more roles in `bootstrap/github-oidc.bash`'s condition, so re-run its
+`create` before the first apply. There is no Argo CD here: autobutler-org/factory deploys its own chart with
+the federated deploy identity. `modules/factory/README.md` has the kubeconfig steps, the
+database roles and URLs a person creates after the first apply, and what the chart
+consumes.

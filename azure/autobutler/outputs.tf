@@ -147,3 +147,68 @@ output "goatcounter_backup_container_url" {
   description = "Blob container holding the daily GoatCounter database backups."
   value       = module.goatcounter.backup_container_url
 }
+
+output "factory_cluster_name" {
+  description = "Factory AKS cluster name. az aks get-credentials --resource-group autobutler-factory --name <this>."
+  value       = module.factory.cluster_name
+}
+
+output "factory_resource_group_name" {
+  description = "Resource group the factory cluster, server, vault, storage and identities live in."
+  value       = module.factory.resource_group_name
+}
+
+output "factory_oidc_issuer_url" {
+  description = "OIDC issuer URL of the factory cluster, for workload identity federated credentials."
+  value       = module.factory.oidc_issuer_url
+}
+
+output "factory_fqdn" {
+  description = "Public hostname of the factory server, factory.cloud.autobutler.org."
+  value       = module.factory.fqdn
+}
+
+output "factory_ingress_public_ip_name" {
+  description = "Static address the factory chart's LoadBalancer Service attaches by name, in factory_resource_group_name."
+  value       = module.factory.ingress_public_ip_name
+}
+
+output "factory_egress_ip_address" {
+  description = "The factory cluster's single outbound address. The PostgreSQL firewall admits it."
+  value       = module.factory.egress_ip_address
+}
+
+output "factory_key_vault_name" {
+  description = "Factory Key Vault. postgres-admin-password is written by terraform; the database URLs by a person after apply."
+  value       = module.factory.key_vault_name
+}
+
+output "factory_postgres_fqdn" {
+  description = "Hostname of the factory PostgreSQL server, holding the factory and substrate databases."
+  value       = module.factory.postgres_fqdn
+}
+
+output "factory_postgres_admin_login" {
+  description = "Admin login of the factory PostgreSQL server. Not a secret; the password is in the vault."
+  value       = module.factory.postgres_admin_login
+}
+
+output "factory_snapshot_container_url" {
+  description = "Private blob container for Agent Substrate snapshots."
+  value       = module.factory.snapshot_container_url
+}
+
+output "factory_deploy_identity_client_id" {
+  description = "Client id autobutler-org/factory's workflows log in with on main to deploy. Not a secret. Set it as a repository variable there."
+  value       = module.factory.deploy_identity_client_id
+}
+
+output "factory_grafana_url" {
+  description = "Azure Managed Grafana for the factory cluster. Sign in with Entra; a person needs a Grafana role on the instance."
+  value       = module.factory.grafana_url
+}
+
+output "factory_monitor_workspace_query_endpoint" {
+  description = "PromQL query endpoint of the factory's Azure Monitor workspace."
+  value       = module.factory.monitor_workspace_query_endpoint
+}
