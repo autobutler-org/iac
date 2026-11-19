@@ -13,7 +13,7 @@ module "factory" {
 
   resource_group_name = azurerm_resource_group.factory.name
   location            = var.location
-  postgres_location   = "eastus2"
+  postgres_location   = "centralus"
   tags                = local.tags
 
   dns_zone_name                = azurerm_dns_zone.cloud.name
