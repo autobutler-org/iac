@@ -31,7 +31,7 @@ output "cluster_ca_certificate" {
 }
 
 output "key_vault_name" {
-  description = "Factory Key Vault. Holds postgres-admin-password, and the database URLs a person writes after apply."
+  description = "Factory Key Vault. Holds the database URLs a person writes after apply, and postgres-admin-password while the managed server is enabled."
   value       = azurerm_key_vault.this.name
 }
 
@@ -46,13 +46,13 @@ output "key_vault_uri" {
 }
 
 output "postgres_fqdn" {
-  description = "Hostname of the PostgreSQL flexible server. TLS is required."
-  value       = azurerm_postgresql_flexible_server.this.fqdn
+  description = "Hostname of the PostgreSQL flexible server. TLS is required. Null while postgres_enabled is off."
+  value       = one(azurerm_postgresql_flexible_server.this[*].fqdn)
 }
 
 output "postgres_admin_login" {
-  description = "Admin login of the PostgreSQL server. The password is the postgres-admin-password secret in the vault."
-  value       = azurerm_postgresql_flexible_server.this.administrator_login
+  description = "Admin login of the PostgreSQL server. The password is the postgres-admin-password secret in the vault. Null while postgres_enabled is off."
+  value       = one(azurerm_postgresql_flexible_server.this[*].administrator_login)
 }
 
 output "fqdn" {

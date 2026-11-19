@@ -1,7 +1,7 @@
 # The factory MVP: a dedicated AKS cluster for the factory server and its agent
-# workers, a PostgreSQL flexible server with the factory and substrate databases, a Key
-# Vault, managed Prometheus and Grafana, a Substrate snapshot container, and the
-# factory hostname.
+# workers, a PostgreSQL flexible server with the factory and substrate databases (off
+# for now, see postgresql.tf), a Key Vault, managed Prometheus and Grafana, a Substrate
+# snapshot container, and the factory hostname.
 #
 # A sibling of modules/ci-cluster, not another instance of it. That module's names are
 # fixed contracts, and it carries a registry, a cache, an image identity and an Argo

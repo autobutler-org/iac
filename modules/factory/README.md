@@ -1,10 +1,10 @@
 # `factory` module
 
 Infrastructure for the [factory](https://github.com/autobutler-org/factory) MVP: a
-dedicated AKS cluster for the factory server and its agent workers, a PostgreSQL
-flexible server with the `factory` and `substrate` databases, a Key Vault, managed
-Prometheus and Grafana, a private blob container for Substrate snapshots, and
-`factory.cloud.autobutler.org`.
+dedicated AKS cluster for the factory server and its agent workers, an optional
+PostgreSQL flexible server with the `factory` and `substrate` databases (off for now), a
+Key Vault, managed Prometheus and Grafana, a private blob container for Substrate
+snapshots, and `factory.cloud.autobutler.org`.
 
 Workers are plain Kubernetes Jobs for the MVP. Agent Substrate may be added later; the
 `substrate` database, the snapshot container and Kubernetes 1.37 keep that open at no
@@ -35,7 +35,7 @@ need.
 | `workers` pool | `Standard_D4pds_v6`, 0 to 3 | Arm, 4 cores, 16 GiB, 128 GiB ephemeral OS disk on local NVMe. Label and taint `factory.autobutler.org/workers=true`. |
 | Azure Monitor workspace `amw-autobutler-factory` | | Managed Prometheus, with the default node, kubernetes and UX recording rules. |
 | Azure Managed Grafana `autobutler-factory` | Standard, Grafana 12 | The workspace is its data source. |
-| PostgreSQL 17 flexible server | `B_Standard_B1ms`, 32 GiB | In `centralus`. Databases `factory` and `substrate`. 7-day backups, no HA. |
+| PostgreSQL 17 flexible server | `B_Standard_B1ms`, 32 GiB | **Off** (`postgres_enabled = false`). When on: in `centralus`, databases `factory` and `substrate`, 7-day backups, no HA. |
 | Key Vault `kv-autobutler-factory` | standard | Access policies, like the CI vault. |
 | Storage `stautobutlerfactory/substrate-snapshots` | LRS | Private, no account keys. |
 | Static IPs | 2 | Ingress for `factory.cloud.autobutler.org`, and the cluster's only egress address. |
@@ -45,9 +45,17 @@ cluster's 1.36 also serves the PodCertificateRequest and ClusterTrustBundle APIs
 Substrate needs, which are beta and off by default on 1.36. AKS has no switch for beta
 APIs or feature gates.
 
-PostgreSQL is in `centralus`. Flexible server provisioning is restricted in `eastus` for
-this subscription, and `eastus2` lists the SKU but refused to create it. It is public,
-and its firewall admits only the cluster's static egress address. TLS is required.
+The managed PostgreSQL server is off ([#124](https://github.com/autobutler-org/iac/issues/124)).
+Azure will not create one for this subscription: flexible server provisioning is
+restricted in `eastus`, and `eastus2` (2026-11-18) and `centralus` (2026-11-19) both list
+`B_Standard_B1ms` yet refused the create with `SkuNotAvailable`. Until that is resolved,
+PostgreSQL runs in the cluster from the factory chart, and there is no managed-server
+bill. Not tried yet: a General Purpose SKU, `westus3`, and a support request to lift the
+restriction; `modules/factory/postgresql.tf` records the details. To retry, set
+`postgres_enabled = true` in `azure/autobutler/factory.tf`.
+
+When enabled, the server is in `centralus`. It is public, and its firewall admits only
+the cluster's static egress address. TLS is required.
 
 ## Quota
 
@@ -86,12 +94,13 @@ kubelogin convert-kubeconfig -l azurecli
 kubectl get nodes
 ```
 
-### Create the database roles and write the URLs
+### Point the factory at its database
 
-Terraform writes one secret, `postgres-admin-password`. Terraform never sees the
-application passwords. A person creates them, from an address the server firewall
-admits. Add a temporary firewall rule for your own address, or run `psql` in a pod in
-the cluster.
+With the managed server off, PostgreSQL runs in the `factory` namespace from the factory
+chart; [its operations doc](https://github.com/autobutler-org/factory/blob/main/docs/operations.md)
+covers installing it. A person creates the database password Secret there, as that doc
+describes, and writes the connection URL to the vault. Terraform writes no database
+secret.
 
 Grant yourself access to the vault. The policies terraform manages are left alone:
 
@@ -100,6 +109,28 @@ az keyvault set-policy --name kv-autobutler-factory \
   --object-id "$(az ad signed-in-user show --query id -o tsv)" \
   --secret-permissions get list set
 ```
+
+Write the URL. The host is the chart's PostgreSQL Service; the name below is the expected
+one, see the factory operations doc for the exact host. The connection stays inside the
+cluster, so it is not TLS:
+
+```bash
+az keyvault secret set --vault-name kv-autobutler-factory --name factory-database-url \
+  --value 'postgres://factory:<password>@factory-postgres.factory.svc.cluster.local:5432/factory?sslmode=disable'
+```
+
+`factory-database-url` reaches the cluster as the Secret `factory-database`, key `url`,
+in the `factory` namespace, within an hour or on
+`kubectl -n factory annotate externalsecret factory-database force-sync=$(date +%s) --overwrite`.
+
+### When the managed server is enabled
+
+With `postgres_enabled = true`, Terraform writes one secret, `postgres-admin-password`.
+Terraform never sees the application passwords. A person creates them, from an address the server firewall
+admits. Add a temporary firewall rule for your own address, or run `psql` in a pod in
+the cluster.
+
+Grant yourself access to the vault as above.
 
 Connect as the admin:
 
@@ -134,10 +165,8 @@ az keyvault secret set --vault-name kv-autobutler-factory --name substrate-readw
   --value 'postgres://substrate_readwrite_user:<password>@psql-autobutler-factory.postgres.database.azure.com:5432/substrate?sslmode=require'
 ```
 
-`factory-database-url` reaches the cluster as the Secret `factory-database`, key `url`,
-in the `factory` namespace, within an hour or on
-`kubectl -n factory annotate externalsecret factory-database force-sync=$(date +%s) --overwrite`.
-The two Substrate URLs, written only if Substrate is adopted, are read at install time:
+`factory-database-url` reaches the cluster the same way as above. The two Substrate
+URLs, written only if Substrate is adopted, are read at install time:
 `ATE_API_POSTGRES_OWNER_CONNECTION_STRING` and
 `ATE_API_POSTGRES_READ_WRITE_CONNECTION_STRING`.
 

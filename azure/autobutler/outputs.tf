@@ -179,17 +179,17 @@ output "factory_egress_ip_address" {
 }
 
 output "factory_key_vault_name" {
-  description = "Factory Key Vault. postgres-admin-password is written by terraform; the database URLs by a person after apply."
+  description = "Factory Key Vault. The database URLs are written by a person after apply; postgres-admin-password by terraform, only while the managed server is enabled."
   value       = module.factory.key_vault_name
 }
 
 output "factory_postgres_fqdn" {
-  description = "Hostname of the factory PostgreSQL server, holding the factory and substrate databases."
+  description = "Hostname of the factory PostgreSQL server, holding the factory and substrate databases. Null, so not shown, while the managed server is off."
   value       = module.factory.postgres_fqdn
 }
 
 output "factory_postgres_admin_login" {
-  description = "Admin login of the factory PostgreSQL server. Not a secret; the password is in the vault."
+  description = "Admin login of the factory PostgreSQL server. Not a secret; the password is in the vault. Null, so not shown, while the managed server is off."
   value       = module.factory.postgres_admin_login
 }
 

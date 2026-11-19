@@ -9,6 +9,12 @@ variable "location" {
   default     = "eastus"
 }
 
+variable "postgres_enabled" {
+  description = "Create the PostgreSQL flexible server, its databases, firewall rule and admin password secret. Off: Azure refuses to create the server for this subscription (SkuNotAvailable), so PostgreSQL runs in the cluster from the factory chart. See postgresql.tf."
+  type        = bool
+  default     = false
+}
+
 variable "postgres_location" {
   description = "Azure region for the PostgreSQL flexible server. Not location: flexible server provisioning is restricted in eastus for this subscription."
   type        = string
