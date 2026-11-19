@@ -35,7 +35,7 @@ need.
 | `workers` pool | `Standard_D4pds_v6`, 0 to 3 | Arm, 4 cores, 16 GiB, 128 GiB ephemeral OS disk on local NVMe. Label and taint `factory.autobutler.org/workers=true`. |
 | Azure Monitor workspace `amw-autobutler-factory` | | Managed Prometheus, with the default node, kubernetes and UX recording rules. |
 | Azure Managed Grafana `autobutler-factory` | Standard, Grafana 12 | The workspace is its data source. |
-| PostgreSQL 17 flexible server | `B_Standard_B1ms`, 32 GiB | In `eastus2`. Databases `factory` and `substrate`. 7-day backups, no HA. |
+| PostgreSQL 17 flexible server | `B_Standard_B1ms`, 32 GiB | In `centralus`. Databases `factory` and `substrate`. 7-day backups, no HA. |
 | Key Vault `kv-autobutler-factory` | standard | Access policies, like the CI vault. |
 | Storage `stautobutlerfactory/substrate-snapshots` | LRS | Private, no account keys. |
 | Static IPs | 2 | Ingress for `factory.cloud.autobutler.org`, and the cluster's only egress address. |
@@ -45,9 +45,9 @@ cluster's 1.36 also serves the PodCertificateRequest and ClusterTrustBundle APIs
 Substrate needs, which are beta and off by default on 1.36. AKS has no switch for beta
 APIs or feature gates.
 
-PostgreSQL is in `eastus2` because flexible server provisioning is restricted in
-`eastus` for this subscription. It is public, and its firewall admits only the
-cluster's static egress address. TLS is required.
+PostgreSQL is in `centralus`. Flexible server provisioning is restricted in `eastus` for
+this subscription, and `eastus2` lists the SKU but refused to create it. It is public,
+and its firewall admits only the cluster's static egress address. TLS is required.
 
 ## Quota
 
@@ -57,6 +57,16 @@ Checked in `eastus` on 2026-11-18 with `az vm list-usage`:
 | --- | --- | --- | --- |
 | Dsv6 | 10 | 2 (CI system node) | 4, plus 2 while the pool rotates |
 | Dpdsv6 | 400 | 0 (CI Arm pool can reach 8) | 12, plus 4 while the pool rotates |
+
+Before the first apply in a subscription, register the resource providers this module
+uses. Terraform does not register them, and an unregistered one fails the apply with
+`MissingSubscriptionRegistration`:
+
+```bash
+for ns in Microsoft.DBforPostgreSQL Microsoft.Monitor Microsoft.Dashboard Microsoft.AlertsManagement; do
+  az provider register --namespace "$ns" --wait
+done
+```
 
 Re-run `./bootstrap/github-oidc.bash create` before the first apply. Grafana's identity
 gets Monitoring Data Reader on the workspace and the apply identity gets Grafana Admin,

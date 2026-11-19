@@ -12,7 +12,7 @@ variable "location" {
 variable "postgres_location" {
   description = "Azure region for the PostgreSQL flexible server. Not location: flexible server provisioning is restricted in eastus for this subscription."
   type        = string
-  default     = "eastus2"
+  default     = "centralus"
 }
 
 variable "dns_zone_name" {

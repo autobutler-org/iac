@@ -1,8 +1,9 @@
 # One burstable server for both databases. No HA, no geo-redundant backup.
 #
-# eastus2, not eastus: `az postgres flexible-server list-skus -l eastus` reports
-# provisioning restricted for this subscription. Both regions are in Virginia, so the
-# cluster is a couple of milliseconds away.
+# centralus, not eastus: `az postgres flexible-server list-skus -l eastus` reports
+# provisioning restricted for this subscription, and eastus2 lists B_Standard_B1ms but
+# refused to create it (SkuNotAvailable) on 2026-11-18. The cluster is roughly 25 ms
+# away, which a work queue polled every few seconds does not notice.
 #
 # Public access, admitted by firewall from the cluster's static egress address only.
 # Nothing in this repo uses a private endpoint yet, and VNet injection needs the server
