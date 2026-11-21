@@ -14,9 +14,12 @@ resource "azurerm_user_assigned_identity" "control" {
   }
 }
 
-# What autobutler-org/factory's GitHub Actions log in as to deploy the chart. main only:
-# a pull request from a fork must not reach the cluster. The subject is the repository's
-# immutable prefix, like the quark image identity in modules/ci-cluster.
+# What autobutler-org/factory's deploy workflow (.github/workflows/deploy.yml) logs in as
+# to upgrade the chart. It trusts only jobs in that repository's `production` GitHub
+# environment, so a pull request, a fork or a workflow outside that environment cannot
+# reach the cluster, and a protection rule on the environment gates every deploy. The
+# subject is the repository's immutable prefix, like the quark image identity in
+# modules/ci-cluster.
 resource "azurerm_user_assigned_identity" "deploy" {
   name                = local.deploy_identity_name
   resource_group_name = var.resource_group_name
@@ -28,10 +31,10 @@ resource "azurerm_user_assigned_identity" "deploy" {
   }
 }
 
-resource "azurerm_federated_identity_credential" "deploy_factory_main" {
-  name                      = "factory-main"
+resource "azurerm_federated_identity_credential" "deploy_factory_production" {
+  name                      = "factory-production"
   user_assigned_identity_id = azurerm_user_assigned_identity.deploy.id
   audience                  = ["api://AzureADTokenExchange"]
   issuer                    = "https://token.actions.githubusercontent.com"
-  subject                   = "${local.factory_repo_subject}:ref:refs/heads/main"
+  subject                   = "${local.factory_repo_subject}:environment:production"
 }
