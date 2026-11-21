@@ -76,7 +76,7 @@ output "snapshot_container_url" {
 }
 
 output "deploy_identity_client_id" {
-  description = "Client id autobutler-org/factory's GitHub Actions log in with on main to deploy. Not a secret."
+  description = "Client id autobutler-org/factory's deploy workflow logs in with from its production environment. Not a secret."
   value       = azurerm_user_assigned_identity.deploy.client_id
 }
 

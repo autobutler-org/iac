@@ -187,7 +187,7 @@ URLs, written only if Substrate is adopted, are read at install time:
 | Grafana | `factory_grafana_url` output |
 | PromQL | `factory_monitor_workspace_query_endpoint` output |
 | Snapshot container | `https://stautobutlerfactory.blob.core.windows.net/substrate-snapshots`, only if Substrate is adopted |
-| Deploy identity | `factory_deploy_identity_client_id` output |
+| Deploy identity | `factory_deploy_identity_client_id` output; trusts subject `repo:autobutler-org@217851255/factory@1463156387:environment:production` only |
 
 There is no `gvisor` RuntimeClass. AKS does not offer gVisor; its native sandbox runtime
 is Kata (`KataVmIsolation` on Azure Linux, x64 sizes with nested virtualization), which

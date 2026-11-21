@@ -199,7 +199,7 @@ output "factory_snapshot_container_url" {
 }
 
 output "factory_deploy_identity_client_id" {
-  description = "Client id autobutler-org/factory's workflows log in with on main to deploy. Not a secret. Set it as a repository variable there."
+  description = "Client id autobutler-org/factory's deploy workflow logs in with from its production environment. Not a secret. Set it as AZURE_CLIENT_ID on that environment."
   value       = module.factory.deploy_identity_client_id
 }
 
